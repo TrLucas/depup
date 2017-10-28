@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+
+"""Command line interface for depup."""
+
+from __future__ import print_function
+
+from src.depup import DepUpdate
+
+if __name__ == '__main__':
+    with DepUpdate() as updater:
+        updater()

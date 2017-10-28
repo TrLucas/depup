@@ -1,0 +1,30 @@
+=== Background ===
+
+CHANGE ME!
+
+=== Included changes in `{{ repository }}` ===
+The list of changes imported by this is:
+[[TicketQuery({%- for issue_id in issue_ids -%}
+    id={{ issue_id }}{%- if not loop.last -%}&{%- endif -%}
+{%- endfor -%}
+,order=id,desc=1,format=table,col=summary|component)]]
+
+{% for change in noissues -%}
+|| [https://hg.adblockplus.org/{{ repository  }}/rev/{{ change.hash }} {{ change.hash }}] || {{ change.message }} || {{ change.author }} ||
+{% endfor %}
+
+=== What to change ===
+Update the `{{ repository }}` dependency
+
+**from**:
+`{{ old }}`
+**to**:
+`{{ new }}`
+
+=== Integration Notes ===
+
+CHANGE ME!
+
+=== Hints for testers ===
+
+CHANGE ME!
