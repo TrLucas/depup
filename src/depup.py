@@ -17,13 +17,14 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 try:
     from urllib import urlopen
 except ImportError:
     from urllib.request import urlopen
 
 import jinja2
+
+from src.vcs import Vcs
 
 
 class DepUpdate(object):
@@ -68,8 +69,11 @@ class DepUpdate(object):
 
         self._make_arguments(*args)
 
-        self.changes = self._get_changes(self.base_revision,
-                                         self._arguments.new_revision)
+        self._main_vcs = Vcs.factory(os.path.join(self._cwd,
+                                     self._arguments.dependency))
+
+        self.changes = self._main_vcs.change_list(self.base_revision,
+                                                  self._arguments.new_revision)
 
         new_is_hash = self.changes[0]['hash'] == self._arguments.new_revision
         if not new_is_hash and not self._arguments.force_hash:
@@ -90,9 +94,20 @@ class DepUpdate(object):
                 '-r', '--revision', dest='new_revision',
                 default=self.DEFAULT_NEW_REVISION,
                 help=('The revision to update to. Defaults to the remote '
-                      'master bookmark.'),
+                      'master bookmark/branch. Must be accessible by the '
+                      "dependency's vcs."),
         )
-        parser.add_argument(
+        changes_group = parser.add_argument_group(
+                title='Output changes',
+                description=('Process the list of included changes to either '
+                             'a bare issue body, or print it to STDOUT.'))
+        excl_group = changes_group.add_mutually_exclusive_group()
+        excl_group.add_argument(
+                '-c', '--changes', action='store_true', default=False,
+                help=('Write the commit messages of all changes between the '
+                      'given revisions to STDOUT.'),
+        )
+        excl_group.add_argument(
                 '-i', '--issue', action='store_true', dest='make_issue',
                 help=('Generate a bare issue body to STDOUT with included '
                       'changes that can be filed on '
@@ -100,11 +115,11 @@ class DepUpdate(object):
                       'provided default template, or that provided  by '
                       '--template'),
         )
-        parser.add_argument(
-                '-c', '--changes', action='store_true', default=False,
-                help=('Write the commit messages of all changes between the '
-                      'given revisions to STDOUT. If given, -i/--issue is '
-                      'ignored.'),
+        changes_group.add_argument(
+                '-t', '--template', dest='tmpl_path',
+                default=self._default_tmpl_path,
+                help=('The template to use. Defaults to the provided '
+                      'default.trac'),
         )
         parser.add_argument(
                 '-l', '--lookup-integration-notes', action='store_true',
@@ -115,21 +130,28 @@ class DepUpdate(object):
                       'network heavy operation.'),
         )
         parser.add_argument(
-                '-t', '--template', dest='tmpl_path',
-                default=self._default_tmpl_path,
-                help=('The template to use. Defaults to the provided '
-                      'default.trac'),
-        )
-        parser.add_argument(
-                '-g', '--gitrepo', dest='local_mirror',
-                help=('Path to the local copy of a mirrored git repository. '
-                      'Used to fetch the corresponding git hash. If not '
+                '-m', '--mirrored-repository', dest='local_mirror',
+                help=('Path to the local copy of a mirrored repository. '
+                      'Used to fetch the corresponding hash. If not '
                       'given, the source parsed from the dependencies file is '
                       'used.'),
         )
-        parser.add_argument(
+        diff_group = parser.add_argument_group(
+                title='Diff creation',
+                description=('Create a unified diff over all changes, that '
+                             'would be included by updating to the new '
+                             'revision.'),
+        )
+        diff_group.add_argument(
                 '-d', '--diff-file', dest='diff_file',
+                metavar='FILENAME',
                 help='File to write a complete diff to.',
+        )
+        diff_group.add_argument(
+                '-n', '--n-context-lines', dest='unified_lines', type=int,
+                default=16,
+                help=('Number of unified context lines to be added to the '
+                      'diff. Defaults to 16'),
         )
         parser.add_argument(
                 '-u', '--update', action='store_true',
@@ -145,18 +167,6 @@ class DepUpdate(object):
         )
 
         self._arguments = parser.parse_args(args if len(args) > 0 else None)
-
-    def _run_vcs(self, *args, **kwargs):
-        """Run mercurial with our overriden defaults."""
-        cmd = self.VCS_EXECUTABLE + args
-        try:
-            return subprocess.check_output(
-                cmd,
-                cwd=os.path.join(self._cwd, self._arguments.dependency),
-            ).decode('utf-8')
-        except subprocess.CalledProcessError as e:
-            print(e.output, file=sys.stderr)
-            raise
 
     @property
     def dep_config(self):
@@ -184,99 +194,12 @@ class DepUpdate(object):
     def base_revision(self):
         """Provide the current revision of the dependency to be processed."""
         if self._base_revision is None:
-            for key in ['*', 'hg']:
+            for key in ['*', self._main_vcs.EXECUTABLE]:
                 rev = self.dep_config[self._arguments.dependency][key][1]
                 if rev is not None:
                     self._base_revision = rev
                     break
         return self._base_revision
-
-    @property
-    def mirrored_git_hash(self):
-        """Provide the mirrored git-hash of the new revision.
-
-        If no local mirror is given, we attempt to perform a bare clone of
-        the mirrored repository from the configured host.
-        """
-        dependency = self._arguments.dependency
-
-        if self._mirrored_git_hash is None:
-            repo_path = None
-            if not self._arguments.local_mirror:
-                self._tmp_girepo_path = tempfile.mkdtemp()
-                repo_path = self._tmp_girepo_path
-
-                # Get the git mirror, which should be used, from the dependency
-                # configuration
-                try:
-                    try:
-                        mirror_source, _ = self.dep_config[dependency]['git']
-                    except KeyError:
-                        mirror_source = None
-                    if mirror_source is None:
-                        mirror_source = self.dep_config['_root']['git']
-                except KeyError:
-                    raise self.MirrorException('No valid mirror was found.')
-
-                # Clone the bare repository, in order to only get the commit
-                # history but no sources.
-                fpnull = open(os.devnull, 'w')
-                subprocess.check_output([
-                    'git', 'clone', '--bare',
-                    os.path.join(mirror_source, dependency),
-                    repo_path], stderr=fpnull)
-            else:
-                repo_path = self._arguments.local_mirror
-                # Make sure that the latest commit history is available
-                subprocess.check_output(['git', 'fetch'], cwd=repo_path)
-
-            change = self.changes[0]
-
-            # To get the correct mirrored hash, we have to search for the
-            # combination of all 3 paramters: Author, commit message and date.
-            cmd = ['git', 'log', '--author={}'.format(change['author']),
-                   '--grep={}'.format(change['message']), '--not',
-                   '--before={}'.format(change['date']), '--not',
-                   '--after={}'.format(change['date']), '--pretty=format:%h']
-
-            self._mirrored_git_hash = subprocess.check_output(
-                cmd, cwd=repo_path
-            ).decode('utf-8')
-            if not self._mirrored_git_hash:
-                raise self.MirrorException(
-                    'Could not find the mirrored git hash.')
-        return self._mirrored_git_hash
-
-    def _get_changes(self, base, new):
-        """Provide a list of changes between the 2 configured revisions.
-
-        Return a list of change-dictionaries, each containing the following
-        key/values pairs:
-            'hash': the commit's hash
-            'author': the commit's author
-            'date': the committing date
-            'message': the commit's message (stripped down to the first line)
-        """
-        # Make sure that the latest commit history is available
-        self._run_vcs('pull')
-
-        # Commit messages containing double quotes will break JSON parsing, if
-        # we don't escape them properly
-        log_template = ('\\{__DQ__hash__DQ__:__DQ__{node|short}__DQ__,'
-                        '__DQ__author__DQ__:__DQ__{author|person}__DQ__,'
-                        '__DQ__date__DQ__:__DQ__{date|rfc822date}__DQ__,'
-                        '__DQ__message__DQ__:__DQ__{desc|strip|'
-                        'firstline}__DQ__}\n')
-
-        changes = self._run_vcs(
-            'log', '--template', log_template, '-r', '{}:{}'.format(new, base)
-        ).replace('"', '\\"').replace('__DQ__', '"')
-
-        # 'hg log' contains the last specified revision. We don't want to
-        # process that.
-        return json.loads(
-            '[{}]'.format(','.join(changes.strip().splitlines()))
-        )[:-1]
 
     def _parse_changes(self, changes):
         """Parse the changelist to issues / noissues."""
@@ -315,10 +238,9 @@ class DepUpdate(object):
     def write_diff(self, filename):
         """Write a unified (hg) diff of all changes to the given file."""
         with io.open(filename, 'w', encoding='utf-8') as fp:
-            fp.write(self._run_vcs(
-                'diff', '-r', '{}:{}'.format(self._arguments.new_revision,
-                                             self.base_revision)
-            ))
+            fp.write(self._main_vcs.merged_diff(self.base_revision,
+                                                self._arguments.new_revision,
+                                                self._arguments.unified_lines))
 
     def _render(self):
         context = {}
@@ -365,37 +287,75 @@ class DepUpdate(object):
 
     def _build_dep_entry(self):
         """Build the current and new string of dependencies file."""
+        root_conf = self._dep_config['_root']
         config = self.dep_config[self._arguments.dependency]
 
-        root_source, root_rev = config.get('*', (None, None))
+        remote_repository_name, none_hash_rev = config.get('*', (None, None))
 
-        current = '{} = {}'.format(self._arguments.dependency, root_source)
+        current = '{} = {}'.format(self._arguments.dependency,
+                                   remote_repository_name)
 
-        if root_rev:
-            current = ' '.join([current, root_rev])
+        possible_sources = {
+            'hg_root': os.path.join(root_conf['hg'],
+                                    self._arguments.dependency),
+            'git_root': os.path.join(root_conf['git'],
+                                     self._arguments.dependency),
+        }
+
+        current_dep_strings = {}
+
+        for key in ['hg', 'git']:
+            tmp_dep = key + ':'
+            source, rev = config.get(key, (None, None))
+            if source:
+                possible_sources[key] = source
+                tmp_dep = '{}{}@'.format(tmp_dep, source)
+
+            if rev:
+                tmp_dep += rev
+            current_dep_strings[key] = tmp_dep
+
+        if none_hash_rev:
+            current = ' '.join([current, none_hash_rev])
         else:
-            for key in ['hg', 'git']:
-                source, rev = config.get(key, (None, None))
-                if rev:
-                    if source:
-                        dep_string = '{}:{}@{}'.format(key, source, rev)
-                    else:
-                        dep_string = '{}:{}'.format(key, rev)
-                    current = ' '.join([current, dep_string])
+            current = ' '.join(
+                    [current, ] +
+                    [current_dep_strings.get(x, '') for x in ['hg', 'git']]
+            ).strip()
+
+        print(possible_sources)
+        print(current_dep_strings)
 
         if self._tag_mode:
             new = '{} = {} {}'.format(
                 self._arguments.dependency,
-                root_source,
+                remote_repository_name,
                 self._arguments.new_revision,
             )
-
         else:
-            new = '{} = {} hg:{} git:{}'.format(
+            main_ex = self._main_vcs.EXECUTABLE
+            mirror_ex = self._main_vcs._other_cls.EXECUTABLE
+
+            if self._arguments.local_mirror:
+                mirror = self._arguments.local_mirror
+            else:
+                for key in [mirror_ex, mirror_ex + '_root']:
+                    if key in possible_sources:
+                        mirror = possible_sources[key]
+                        break
+
+            # TODO: respect custom sources in new dependencies
+
+            new = '{} = {} hg:{hg} git:{git}'.format(
                 self._arguments.dependency,
-                root_source,
-                self.changes[0]['hash'],
-                self.mirrored_git_hash,
+                remote_repository_name,
+                **{main_ex: self.changes[0]['hash'],
+                   mirror_ex: self._main_vcs.mirrored_hash(
+                       self.changes[0]['author'],
+                       self.changes[0]['date'],
+                       self.changes[0]['message'],
+                       mirror,
+                )}
             )
 
         return current, new
