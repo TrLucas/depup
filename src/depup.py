@@ -14,7 +14,6 @@ import io
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 try:
@@ -52,9 +51,6 @@ class DepUpdate(object):
         """
         self._cwd = os.getcwd()
 
-        self._tmp_girepo_path = None
-        self._mirrored_git_hash = None
-
         self._base_revision = None
         self._parsed_changes = None
         self._arguments = None
@@ -63,23 +59,35 @@ class DepUpdate(object):
 
         self._tag_mode = False
 
-        self._default_tmpl_path = os.path.join(
+        default_template = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), 'templates',
             'default.trac')
 
-        self._make_arguments(*args)
+        self._make_arguments(default_template, *args)
 
         self._main_vcs = Vcs.factory(os.path.join(self._cwd,
                                      self._arguments.dependency))
 
         self.changes = self._main_vcs.change_list(self.base_revision,
                                                   self._arguments.new_revision)
+        if len(self.changes) == 0:
+            self.changes = self._main_vcs.change_list(
+                    self._arguments.new_revision,
+                    self.base_revision
+            )
+            if len(self.changes) == 0:
+                print(
+                    ('NO CHANGES FOUND. You are either trying to update to a '
+                     'revision, which the dependency already is at - or '
+                     'something went wrong while executing the vcs. Exiting.'),
+                    file=sys.stderr)
+                exit(1)
+            else:
+                # reverse mode. Uh-oh.
+                print('WARNING: you are trying to downgrade the dependency!',
+                      file=sys.stderr)
 
-        new_is_hash = self.changes[0]['hash'] == self._arguments.new_revision
-        if not new_is_hash and not self._arguments.force_hash:
-            self._tag_mode = True
-
-    def _make_arguments(self, *args):
+    def _make_arguments(self, default_template, *args):
         """Initialize the argument parser and store the arguments."""
         parser = argparse.ArgumentParser(
             description=__doc__,
@@ -101,7 +109,7 @@ class DepUpdate(object):
                 title='Output changes',
                 description=('Process the list of included changes to either '
                              'a bare issue body, or print it to STDOUT.'))
-        excl_group = changes_group.add_mutually_exclusive_group()
+        excl_group = changes_group.add_mutually_exclusive_group(required=True)
         excl_group.add_argument(
                 '-c', '--changes', action='store_true', default=False,
                 help=('Write the commit messages of all changes between the '
@@ -115,11 +123,23 @@ class DepUpdate(object):
                       'provided default template, or that provided  by '
                       '--template'),
         )
+        excl_group.add_argument(
+                '-d', '--diff', dest='diff', action='store_true',
+                help=('Print a merged unified diff of all included changes to '
+                      'STDOUT. By default, 16 lines of context are integrated '
+                      '(see -n/--n-context-lines).'),
+        )
+        changes_group.add_argument(
+                '-n', '--n-context-lines', dest='unified_lines', type=int,
+                default=16,
+                help=('Number of unified context lines to be added to the '
+                      'diff. Defaults to 16 (Used only with -d/--diff).'),
+        )
         changes_group.add_argument(
                 '-t', '--template', dest='tmpl_path',
-                default=self._default_tmpl_path,
+                default=default_template,
                 help=('The template to use. Defaults to the provided '
-                      'default.trac'),
+                      'default.trac (Used only with -i/--issue).'),
         )
         parser.add_argument(
                 '-l', '--lookup-integration-notes', action='store_true',
@@ -136,34 +156,16 @@ class DepUpdate(object):
                       'given, the source parsed from the dependencies file is '
                       'used.'),
         )
-        diff_group = parser.add_argument_group(
-                title='Diff creation',
-                description=('Create a unified diff over all changes, that '
-                             'would be included by updating to the new '
-                             'revision.'),
-        )
-        diff_group.add_argument(
-                '-d', '--diff-file', dest='diff_file',
-                metavar='FILENAME',
-                help='File to write a complete diff to.',
-        )
-        diff_group.add_argument(
-                '-n', '--n-context-lines', dest='unified_lines', type=int,
-                default=16,
-                help=('Number of unified context lines to be added to the '
-                      'diff. Defaults to 16'),
-        )
         parser.add_argument(
                 '-u', '--update', action='store_true',
                 dest='update_dependencies',
                 help='Update the local dependencies to the new revisions.',
         )
         parser.add_argument(
-                '-f', '--force-hash', action='store_true', default=False,
-                dest='force_hash',
-                help=('Force the generated issue or dependency update to '
-                      'contain hashes, rather than tags / bookmarks / '
-                      'branches'),
+                '-a', '--ambiguous', action='store_true', default=False,
+                dest='tag_mode',
+                help=('Use possibly ambiguous revisions, such as tags, '
+                      'bookmarks, branches.'),
         )
 
         self._arguments = parser.parse_args(args if len(args) > 0 else None)
@@ -235,12 +237,11 @@ class DepUpdate(object):
             self._parsed_changes['noissues'] = noissues
         return self._parsed_changes
 
-    def write_diff(self, filename):
-        """Write a unified (hg) diff of all changes to the given file."""
-        with io.open(filename, 'w', encoding='utf-8') as fp:
-            fp.write(self._main_vcs.merged_diff(self.base_revision,
-                                                self._arguments.new_revision,
-                                                self._arguments.unified_lines))
+    def write_diff(self):
+        """Write a unified diff of all changes to STDOUT."""
+        print(self._main_vcs.merged_diff(self.base_revision,
+                                         self._arguments.new_revision,
+                                         self._arguments.unified_lines))
 
     def _render(self):
         context = {}
@@ -323,10 +324,7 @@ class DepUpdate(object):
                     [current_dep_strings.get(x, '') for x in ['hg', 'git']]
             ).strip()
 
-        print(possible_sources)
-        print(current_dep_strings)
-
-        if self._tag_mode:
+        if self._arguments.tag_mode:
             new = '{} = {} {}'.format(
                 self._arguments.dependency,
                 remote_repository_name,
@@ -344,19 +342,22 @@ class DepUpdate(object):
                         mirror = possible_sources[key]
                         break
 
-            # TODO: respect custom sources in new dependencies
-
-            new = '{} = {} hg:{hg} git:{git}'.format(
-                self._arguments.dependency,
-                remote_repository_name,
-                **{main_ex: self.changes[0]['hash'],
-                   mirror_ex: self._main_vcs.mirrored_hash(
+            hashes = {
+                main_ex: self.changes[0]['hash'],
+                mirror_ex: self._main_vcs.mirrored_hash(
                        self.changes[0]['author'],
                        self.changes[0]['date'],
                        self.changes[0]['message'],
-                       mirror,
-                )}
-            )
+                       mirror),
+                }
+
+            for key in [main_ex, mirror_ex]:
+                if key in possible_sources:
+                    hashes[key] = '{}@{}'.format(possible_sources[key],
+                                                 hashes[key])
+
+            new = '{} = {} hg:{hg} git:{git}'.format(
+                self._arguments.dependency, remote_repository_name, **hashes)
 
         return current, new
 
@@ -372,26 +373,13 @@ class DepUpdate(object):
         with io.open(dependency_path, 'w', encoding='utf-8') as fp:
             fp.write(current_deps.replace(current, new))
 
-    def __enter__(self):
-        """Let this class's objects be available as a context."""
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Clean up after leaving this class's objects context.
-
-        In DepUpdate.mirrored_git_hash, we potentially create a temporary
-        directory. Remove this directory after leaving self's context.
-        """
-        if self._tmp_girepo_path is not None:
-            shutil.rmtree(self._tmp_girepo_path, ignore_errors=True)
-
     def __call__(self):
         """Let this class's objects be callable, run all desired tasks."""
         if self._arguments.lookup_inotes:
             self.lookup_integration_notes()
 
-        if self._arguments.diff_file is not None:
-            self.write_diff(self._arguments.diff_file)
+        if self._arguments.diff:
+            self.write_diff()
 
         if self._arguments.update_dependencies:
             self.update_dependencies_file()

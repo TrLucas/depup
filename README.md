@@ -23,7 +23,7 @@ This program runs with both Python 2.7.* and Python 3.*.
 
 ## Installation
 
-Run the setup.y:
+Execute setup.py:
 ```
 $ python setup.py install
 ```
@@ -36,15 +36,15 @@ Simply call the executable inside a repository which as dependencies.
 Example:
 
 ```
-$ depup adblockpluscore -r master -f
+$ depup adblockpluscore -r master -f -c
 ```
 ## Help
 
 Depup comes with an integrated help page. The full page:
 
 ```
-usage: depup [-h] [-r NEW_REVISION] [-c | -i] [-t TMPL_PATH] [-l]
-             [-m LOCAL_MIRROR] [-d FILENAME] [-n UNIFIED_LINES] [-u] [-f]
+usage: depup [-h] [-r NEW_REVISION] (-c | -i | -d) [-n UNIFIED_LINES]
+             [-t TMPL_PATH] [-l] [-m LOCAL_MIRROR] [-u] [-a]
              dependency
 
 Prepare a dependency update.
@@ -73,9 +73,8 @@ optional arguments:
                         to fetch the corresponding hash. If not given, the
                         source parsed from the dependencies file is used.
   -u, --update          Update the local dependencies to the new revisions.
-  -f, --force-hash      Force the generated issue or dependency update to
-                        contain hashes, rather than tags / bookmarks /
-                        branches
+  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
+                        bookmarks, branches.
 
 Output changes:
   Process the list of included changes to either a bare issue body, or print it to STDOUT.
@@ -87,17 +86,14 @@ Output changes:
                         https://issues.adblockplus.org/. Uses either the
                         provided default template, or that provided by
                         --template
-  -t TMPL_PATH, --template TMPL_PATH
-                        The template to use. Defaults to the provided
-                        default.trac
-
-Diff creation:
-  Create a unified diff over all changes, that would be included by updating to the new revision.
-
-  -d FILENAME, --diff-file FILENAME
-                        File to write a complete diff to.
+  -d, --diff            Print a merged unified diff of all included changes to
+                        STDOUT. By default, 16 lines of context are integrated
+                        (see -n/--n-context-lines).
   -n UNIFIED_LINES, --n-context-lines UNIFIED_LINES
                         Number of unified context lines to be added to the
-                        diff. Defaults to 16
+                        diff. Defaults to 16 (Used only with -d/--diff).
+  -t TMPL_PATH, --template TMPL_PATH
+                        The template to use. Defaults to the provided
+                        default.trac (Used only with -i/--issue).
 
 ```

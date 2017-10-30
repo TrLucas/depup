@@ -19,7 +19,7 @@ class Vcs(object):
         self._cwd = cwd
         self._mirrored_hash_for = {}
 
-    def run_cmd(self, *args):
+    def run_cmd(self, *args, **kwargs):
         """Run the vcs with the given commands."""
         cmd = self.BASE_CMD + args
         try:
@@ -30,7 +30,7 @@ class Vcs(object):
                     stderr=fpnull,
                 ).decode('utf-8')
         except subprocess.CalledProcessError as e:
-            print(e.output, file=sys.stderr)
+            print(e.output.decode('utf-8'), file=sys.stderr)
             raise
 
     def _get_latest(self):
@@ -116,8 +116,8 @@ class Mercurial(Vcs):
         return ('--template', log_format)
 
     def change_list(self, base_rev, new_rev):
-        # Mercurial reverses the list of changes and also prints out the
-        # parent changeset
+        # Mercurial's conmmand for producing a log between revisions
+        # switches the revisions. Additoinally the current parent is returned.
         return super(Mercurial, self).change_list(new_rev, base_rev)[:-1]
 
     def matching_hash(self, author, date, message):
@@ -137,6 +137,7 @@ class Mercurial(Vcs):
             fp.write('[paths]{}default = {}{}'.format(os.linesep, dep_location,
                                                       os.linesep))
         return cwd, Mercurial(cwd)
+
 
 class Git(Vcs):
     EXECUTABLE = 'git'
