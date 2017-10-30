@@ -7,7 +7,7 @@ dependency update and provides additional information, i.e. a complete
 diff of imported changes, as well as related integration notes.
 """
 
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
 import argparse
 import io
