@@ -109,16 +109,20 @@ class Mercurial(Vcs):
         super(Mercurial, self).__init__(cwd)
 
     def _rev_comb(self, rev_a, rev_b):
-        return ('-r', '{}:{}'.format(rev_a, rev_b))
+        # Only take into account those changesets, which are actually affecting
+        # the repository's content. See
+        # https://www.mercurial-scm.org/repo/hg/help/revsets
+        return ('-r', '{}::{}'.format(rev_a, rev_b))
 
     def _log_format(self):
         log_format = self.LOG_TEMLATE.replace('"', self.JSON_DQUOTES)
         return ('--template', log_format)
 
-    def change_list(self, base_rev, new_rev):
-        # Mercurial's conmmand for producing a log between revisions
-        # switches the revisions. Additoinally the current parent is returned.
-        return super(Mercurial, self).change_list(new_rev, base_rev)[:-1]
+    def change_list(self, *args):
+        # Mercurial's conmmand for producing a log between revisions using the
+        # revision set produced by self._rev_comb returns the changesets in a
+        # reversed order. Additoinally the current revision is returned.
+        return list(reversed(super(Mercurial, self).change_list(*args)[1:]))
 
     def matching_hash(self, author, date, message):
         return self.run_cmd('log', '-u', author, '-d', date, '--keyword',
