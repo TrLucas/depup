@@ -53,7 +53,7 @@ class DepUpdate(object):
 
         self._base_revision = None
         self._parsed_changes = None
-        self._arguments = None
+        self.arguments = None
 
         self._dep_config = None
 
@@ -66,13 +66,13 @@ class DepUpdate(object):
         self._make_arguments(default_template, *args)
 
         self._main_vcs = Vcs.factory(os.path.join(self._cwd,
-                                     self._arguments.dependency))
+                                     self.arguments.dependency))
 
         self.changes = self._main_vcs.change_list(self.base_revision,
-                                                  self._arguments.new_revision)
+                                                  self.arguments.new_revision)
         if len(self.changes) == 0:
             self.changes = self._main_vcs.change_list(
-                    self._arguments.new_revision,
+                    self.arguments.new_revision,
                     self.base_revision
             )
             if len(self.changes) == 0:
@@ -93,55 +93,33 @@ class DepUpdate(object):
             description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-        parser.add_argument(
+        # First prepare all shared options
+        options_parser = argparse.ArgumentParser(add_help=False)
+        shared = options_parser.add_argument_group(title='Shared options')
+        shared.add_argument(
                 'dependency',
                 help=('The dependency to be updated, as specified in the '
                       'dependencies file.'),
         )
-        parser.add_argument(
+        shared.add_argument(
                 '-r', '--revision', dest='new_revision',
                 default=self.DEFAULT_NEW_REVISION,
                 help=('The revision to update to. Defaults to the remote '
                       'master bookmark/branch. Must be accessible by the '
                       "dependency's vcs."),
         )
-        changes_group = parser.add_argument_group(
-                title='Output changes',
-                description=('Process the list of included changes to either '
-                             'a bare issue body, or print it to STDOUT.'))
-        excl_group = changes_group.add_mutually_exclusive_group(required=True)
-        excl_group.add_argument(
-                '-c', '--changes', action='store_true', default=False,
-                help=('Write the commit messages of all changes between the '
-                      'given revisions to STDOUT.'),
+        shared.add_argument(
+                '-a', '--ambiguous', action='store_true', default=False,
+                dest='tag_mode',
+                help=('Use possibly ambiguous revisions, such as tags, '
+                      'bookmarks, branches.'),
         )
-        excl_group.add_argument(
-                '-i', '--issue', action='store_true', dest='make_issue',
-                help=('Generate a bare issue body to STDOUT with included '
-                      'changes that can be filed on '
-                      'https://issues.adblockplus.org/. Uses either the '
-                      'provided default template, or that provided  by '
-                      '--template'),
+        shared.add_argument(
+                '-f', '--filename', dest='filename', default=None,
+                help=("When specified, write the subcommand's output to the "
+                      'given, rather than to STDOUT.')
         )
-        excl_group.add_argument(
-                '-d', '--diff', dest='diff', action='store_true',
-                help=('Print a merged unified diff of all included changes to '
-                      'STDOUT. By default, 16 lines of context are integrated '
-                      '(see -n/--n-context-lines).'),
-        )
-        changes_group.add_argument(
-                '-n', '--n-context-lines', dest='unified_lines', type=int,
-                default=16,
-                help=('Number of unified context lines to be added to the '
-                      'diff. Defaults to 16 (Used only with -d/--diff).'),
-        )
-        changes_group.add_argument(
-                '-t', '--template', dest='tmpl_path',
-                default=default_template,
-                help=('The template to use. Defaults to the provided '
-                      'default.trac (Used only with -i/--issue).'),
-        )
-        parser.add_argument(
+        shared.add_argument(
                 '-l', '--lookup-integration-notes', action='store_true',
                 dest='lookup_inotes', default=False,
                 help=('Search https://issues.adblockplus.org for integration '
@@ -149,26 +127,52 @@ class DepUpdate(object):
                       'results are written to STDERR. CAUTION: This is a very '
                       'network heavy operation.'),
         )
-        parser.add_argument(
+        shared.add_argument(
                 '-m', '--mirrored-repository', dest='local_mirror',
                 help=('Path to the local copy of a mirrored repository. '
                       'Used to fetch the corresponding hash. If not '
                       'given, the source parsed from the dependencies file is '
                       'used.'),
         )
-        parser.add_argument(
+        shared.add_argument(
                 '-u', '--update', action='store_true',
                 dest='update_dependencies',
                 help='Update the local dependencies to the new revisions.',
         )
-        parser.add_argument(
-                '-a', '--ambiguous', action='store_true', default=False,
-                dest='tag_mode',
-                help=('Use possibly ambiguous revisions, such as tags, '
-                      'bookmarks, branches.'),
+
+        subs = parser.add_subparsers(
+                title='Subcommands', dest='action',
+                help=('Required, the actual command to be executed. Execute '
+                      'run "<subcommand> -h" for more information.')
         )
 
-        self._arguments = parser.parse_args(args if len(args) > 0 else None)
+        # Add the command and options for creating a diff
+        diff_parser = subs.add_parser('diff', parents=[options_parser])
+        diff_parser.add_argument(
+                '-n', '--n-context-lines', dest='unified_lines', type=int,
+                default=16,
+                help=('Number of unified context lines to be added to the '
+                      'diff. Defaults to 16 (Used only with -d/--diff).'),
+        )
+
+        # Add the command and options for creating an issue body
+        issue_parser = subs.add_parser('issue', parents=[options_parser])
+        issue_parser.add_argument(
+                '-t', '--template', dest='tmpl_path',
+                default=default_template,
+                help=('The template to use. Defaults to the provided '
+                      'default.trac (Used only with -i/--issue).'),
+        )
+        issue_parser.add_argument(
+                '-v', '--vcs-format', dest='format', choices=['hg', 'git'],
+                help=('Hash format to be used for changes, which could not be '
+                      'associated with an issue. Defaults to "hg".'),
+        )
+
+        # Add the command for printing a list of changes
+        subs.add_parser('changes', parents=[options_parser])
+
+        self.arguments = parser.parse_args(args if len(args) > 0 else None)
 
     @property
     def dep_config(self):
@@ -197,7 +201,7 @@ class DepUpdate(object):
         """Provide the current revision of the dependency to be processed."""
         if self._base_revision is None:
             for key in ['*', self._main_vcs.EXECUTABLE]:
-                rev = self.dep_config[self._arguments.dependency][key][1]
+                rev = self.dep_config[self.arguments.dependency][key][1]
                 if rev is not None:
                     self._base_revision = rev
                     break
@@ -237,20 +241,21 @@ class DepUpdate(object):
             self._parsed_changes['noissues'] = noissues
         return self._parsed_changes
 
-    def write_diff(self):
+    def build_diff(self):
         """Write a unified diff of all changes to STDOUT."""
         print(self._main_vcs.merged_diff(self.base_revision,
-                                         self._arguments.new_revision,
-                                         self._arguments.unified_lines))
+                                         self.arguments.new_revision,
+                                         self.arguments.unified_lines))
 
-    def _render(self):
+    def build_issue(self):
+        """Process all changes and render an issue."""
         context = {}
-        context['repository'] = self._arguments.dependency
+        context['repository'] = self.arguments.dependency
         context['issue_ids'] = self.parsed_changes['issue_ids']
         context['noissues'] = self.parsed_changes['noissues']
         context['old'], context['new'] = self._build_dep_entry()
 
-        path, filename = os.path.split(self._arguments.tmpl_path)
+        path, filename = os.path.split(self.arguments.tmpl_path)
 
         return jinja2.Environment(
             loader=jinja2.FileSystemLoader(path or './')
@@ -281,26 +286,28 @@ class DepUpdate(object):
 
             print('Integration notes found: ' + issue_url, file=sys.stderr)
 
-    def write_changes(self):
+    def build_changes(self):
         """Write a descriptive list of the changes to STDOUT."""
-        for change in self.changes:
-            print('( {hash} ) : {message} (by {author})'.format(**change))
+        return os.linesep.join(
+            ['( {hash} ) : {message} (by {author})'.format(**change)
+             for change in self.changes]
+        )
 
     def _build_dep_entry(self):
         """Build the current and new string of dependencies file."""
         root_conf = self._dep_config['_root']
-        config = self.dep_config[self._arguments.dependency]
+        config = self.dep_config[self.arguments.dependency]
 
         remote_repository_name, none_hash_rev = config.get('*', (None, None))
 
-        current = '{} = {}'.format(self._arguments.dependency,
+        current = '{} = {}'.format(self.arguments.dependency,
                                    remote_repository_name)
 
         possible_sources = {
             'hg_root': os.path.join(root_conf['hg'],
-                                    self._arguments.dependency),
+                                    self.arguments.dependency),
             'git_root': os.path.join(root_conf['git'],
-                                     self._arguments.dependency),
+                                     self.arguments.dependency),
         }
 
         current_dep_strings = {}
@@ -324,18 +331,18 @@ class DepUpdate(object):
                     [current_dep_strings.get(x, '') for x in ['hg', 'git']]
             ).strip()
 
-        if self._arguments.tag_mode:
+        if self.arguments.tag_mode:
             new = '{} = {} {}'.format(
-                self._arguments.dependency,
+                self.arguments.dependency,
                 remote_repository_name,
-                self._arguments.new_revision,
+                self.arguments.new_revision,
             )
         else:
             main_ex = self._main_vcs.EXECUTABLE
             mirror_ex = self._main_vcs._other_cls.EXECUTABLE
 
-            if self._arguments.local_mirror:
-                mirror = self._arguments.local_mirror
+            if self.arguments.local_mirror:
+                mirror = self.arguments.local_mirror
             else:
                 for key in [mirror_ex, mirror_ex + '_root']:
                     if key in possible_sources:
@@ -357,7 +364,7 @@ class DepUpdate(object):
                                                  hashes[key])
 
             new = '{} = {} hg:{hg} git:{git}'.format(
-                self._arguments.dependency, remote_repository_name, **hashes)
+                self.arguments.dependency, remote_repository_name, **hashes)
 
         return current, new
 
@@ -375,16 +382,21 @@ class DepUpdate(object):
 
     def __call__(self):
         """Let this class's objects be callable, run all desired tasks."""
-        if self._arguments.lookup_inotes:
+        action_map = {
+            'diff': self.build_diff,
+            'changes': self.build_changes,
+            'issue': self.build_issue,
+        }
+        if self.arguments.lookup_inotes:
             self.lookup_integration_notes()
 
-        if self._arguments.diff:
-            self.write_diff()
-
-        if self._arguments.update_dependencies:
+        if self.arguments.update_dependencies:
             self.update_dependencies_file()
 
-        if self._arguments.changes:
-            self.write_changes()
-        elif self._arguments.make_issue:
-            print(self._render())
+        output = action_map[self.arguments.action]()
+        if self.arguments.filename is not None:
+            with io.open(self.arguments.filename, 'w', encoding='utf-8') as fp:
+                fp.write(output)
+            print('Output writen to ' + self.arguments.filename)
+        else:
+            print(output)

@@ -38,7 +38,7 @@ A few examples:
 ### Show a list of changes between the current revision and the remote master for adblockpluscore
 
 ```
-$ depup adblockpluscore -c
+$ depup changes adblockpluscore
 
 ( dbfc37143497 ) : Noissue - Fix the escaping of '{' and '}' in CSS selectors (by Hubert Figuière)
 ( 1bb277740973 ) : Issue 5160 - Alias new class names and properties. (by Hubert Figuière)
@@ -49,7 +49,7 @@ $ depup adblockpluscore -c
 ### Generate a bare issue body with an ambiguous tag, rather than hashes
 
 ```
-$ depup adblockpluscore -r master -i -a
+$ depup issue adblockpluscore -r master -a
 === Background ===
 
 CHANGE ME!
@@ -81,7 +81,7 @@ CHANGE ME!
 ### Print information on the last 5 commits and lookup possible "Integration Notes" for those
 
 ```
-(gitrepo)$ depup adblockpluscore -r HEAD~5 -c -l
+(gitrepo)$ depup changes adblockpluscore -r HEAD~5 -l
 
 WARNING: you are trying to downgrade the dependency!
 Integration notes found: https://issues.adblockplus.org/ticket/5735
@@ -112,12 +112,12 @@ For more information, please consult [the jinja2 documentation](http://jinja.poc
 
 ## Help
 
-Depup comes with an integrated help page. The full page:
+Depup comes with an integrated help page for each subcommand. The full pages:
+
+### Root
 
 ```
-usage: depup [-h] [-r NEW_REVISION] (-c | -i | -d) [-n UNIFIED_LINES]
-             [-t TMPL_PATH] [-l] [-m LOCAL_MIRROR] [-u] [-a]
-             dependency
+usage: depup [-h] {diff,issue,changes} ...
 
 Prepare a dependency update.
 
@@ -125,16 +125,40 @@ This script executes the automatable work which needs to be done for a
 dependency update and provides additional information, i.e. a complete
 diff of imported changes, as well as related integration notes.
 
-positional arguments:
-  dependency            The dependency to be updated, as specified in the
-                        dependencies file.
+optional arguments:
+  -h, --help            show this help message and exit
+
+Subcommands:
+  {diff,issue,changes}  Required, the actual command to be executed. Execute
+                        run "<subcommand> -h" for more information.
+
+```
+
+### diff
+
+```
+usage: depup diff [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
+                  [-m LOCAL_MIRROR] [-u] [-n UNIFIED_LINES]
+                  dependency
 
 optional arguments:
   -h, --help            show this help message and exit
+  -n UNIFIED_LINES, --n-context-lines UNIFIED_LINES
+                        Number of unified context lines to be added to the
+                        diff. Defaults to 16 (Used only with -d/--diff).
+
+Shared options:
+  dependency            The dependency to be updated, as specified in the
+                        dependencies file.
   -r NEW_REVISION, --revision NEW_REVISION
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
+  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
+                        bookmarks, branches.
+  -f FILENAME, --filename FILENAME
+                        When specified, write the subcommand's output to the
+                        given, rather than to STDOUT.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
@@ -145,27 +169,81 @@ optional arguments:
                         to fetch the corresponding hash. If not given, the
                         source parsed from the dependencies file is used.
   -u, --update          Update the local dependencies to the new revisions.
+
+```
+
+### changes
+
+```
+usage: depup changes [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
+                     [-m LOCAL_MIRROR] [-u]
+                     dependency
+
+optional arguments:
+  -h, --help            show this help message and exit
+
+Shared options:
+  dependency            The dependency to be updated, as specified in the
+                        dependencies file.
+  -r NEW_REVISION, --revision NEW_REVISION
+                        The revision to update to. Defaults to the remote
+                        master bookmark/branch. Must be accessible by the
+                        dependency's vcs.
   -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
                         bookmarks, branches.
+  -f FILENAME, --filename FILENAME
+                        When specified, write the subcommand's output to the
+                        given, rather than to STDOUT.
+  -l, --lookup-integration-notes
+                        Search https://issues.adblockplus.org for integration
+                        notes associated with the included issue IDs. The
+                        results are written to STDERR. CAUTION: This is a very
+                        network heavy operation.
+  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
+                        Path to the local copy of a mirrored repository. Used
+                        to fetch the corresponding hash. If not given, the
+                        source parsed from the dependencies file is used.
+  -u, --update          Update the local dependencies to the new revisions.
 
-Output changes:
-  Process the list of included changes to either a bare issue body, or print it to STDOUT.
+```
 
-  -c, --changes         Write the commit messages of all changes between the
-                        given revisions to STDOUT.
-  -i, --issue           Generate a bare issue body to STDOUT with included
-                        changes that can be filed on
-                        https://issues.adblockplus.org/. Uses either the
-                        provided default template, or that provided by
-                        --template
-  -d, --diff            Print a merged unified diff of all included changes to
-                        STDOUT. By default, 16 lines of context are integrated
-                        (see -n/--n-context-lines).
-  -n UNIFIED_LINES, --n-context-lines UNIFIED_LINES
-                        Number of unified context lines to be added to the
-                        diff. Defaults to 16 (Used only with -d/--diff).
+### issue
+
+```
+usage: depup issue [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
+                   [-m LOCAL_MIRROR] [-u] [-t TMPL_PATH] [-v {hg,git}]
+                   dependency
+
+optional arguments:
+  -h, --help            show this help message and exit
   -t TMPL_PATH, --template TMPL_PATH
                         The template to use. Defaults to the provided
                         default.trac (Used only with -i/--issue).
+  -v {hg,git}, --vcs-format {hg,git}
+                        Hash format to be used for changes, which could not be
+                        associated with an issue. Defaults to "hg".
+
+Shared options:
+  dependency            The dependency to be updated, as specified in the
+                        dependencies file.
+  -r NEW_REVISION, --revision NEW_REVISION
+                        The revision to update to. Defaults to the remote
+                        master bookmark/branch. Must be accessible by the
+                        dependency's vcs.
+  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
+                        bookmarks, branches.
+  -f FILENAME, --filename FILENAME
+                        When specified, write the subcommand's output to the
+                        given, rather than to STDOUT.
+  -l, --lookup-integration-notes
+                        Search https://issues.adblockplus.org for integration
+                        notes associated with the included issue IDs. The
+                        results are written to STDERR. CAUTION: This is a very
+                        network heavy operation.
+  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
+                        Path to the local copy of a mirrored repository. Used
+                        to fetch the corresponding hash. If not given, the
+                        source parsed from the dependencies file is used.
+  -u, --update          Update the local dependencies to the new revisions.
 
 ```
