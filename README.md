@@ -33,11 +33,83 @@ _Please note: setup.py will additionally install [jinja2](http://jinja.pocoo.org
 ## Running the programm
 
 Simply call the executable inside a repository which as dependencies.
-Example:
+A few examples:
+
+### Show a list of changes between the current revision and the remote master for adblockpluscore
 
 ```
-$ depup adblockpluscore -r master -f -c
+$ depup adblockpluscore -c
+
+( dbfc37143497 ) : Noissue - Fix the escaping of '{' and '}' in CSS selectors (by Hubert Figuière)
+( 1bb277740973 ) : Issue 5160 - Alias new class names and properties. (by Hubert Figuière)
+( 280efb445cc1 ) : Issue 5147 - Invalidate wrapper on delete (by Hubert Figuière)
+
 ```
+
+### Generate a bare issue body with an ambiguous tag, rather than hashes
+
+```
+$ depup adblockpluscore -r master -i -a
+=== Background ===
+
+CHANGE ME!
+
+=== Included changes in `adblockpluscore` ===
+The list of changes imported by this is:
+[[TicketQuery(id=5147&id=5160,order=id,desc=1,format=table,col=summary|component)]]
+
+|| [https://hg.adblockplus.org/adblockpluscore/rev/dbfc37143497 dbfc37143497] || Noissue - Fix the escaping of '{' and '}' in CSS selectors || Hubert Figuière ||
+
+
+=== What to change ===
+Update the `adblockpluscore` dependency
+
+**from**:
+`adblockpluscore = adblockpluscore hg:b21bddce2678 git:2b57122`
+**to**:
+`adblockpluscore = adblockpluscore master`
+
+=== Integration Notes ===
+
+CHANGE ME!
+
+=== Hints for testers ===
+
+CHANGE ME!
+```
+
+### Print information on the last 5 commits and lookup possible "Integration Notes" for those
+
+```
+(gitrepo)$ depup adblockpluscore -r HEAD~5 -c -l
+
+WARNING: you are trying to downgrade the dependency!
+Integration notes found: https://issues.adblockplus.org/ticket/5735
+( 2b57122 ) : Noissue - Fixed typo with getLocalizedTexts function Review: https://codereview.adblockplus.org/29567746/ (by Dave Barker)
+( 662ce93 ) : Noissue - Updated recommended subscriptions (by Wladimir Palant)
+( 0591517 ) : Issue 5773 - use ES6 for stylesheets and cssRules. (by Hubert Figuière)
+( 991b43c ) : Issue 5797 - Removed obsolete arguments from ElemHideEmulation constructor (by Sebastian Noack)
+( e533ded ) : Issue 5735 - Use JS Map instead of Object for matcher properties filterByKeyword and keywordByFilter (by Sergei Zabolotskikh)
+```
+
+## Templating
+
+You can provide your own template, which can be rendered with all available information. The default template renders as shown in the above example.
+
+There are at any time these values exposed to the template:
+
+- `repository` - the repository to update (equals the positional argument of depup).
+- `issue_ids` - A list of encountered Issue ids or an empty array.
+- `noissues` - Changes which could not be associated with an issue id. Either an empty array, or a list of dictionaries, each containg the following key/value pairs:
+  * `author` - the author of the commit.
+  * `hash` - the hash of the commit (format depends on the VCS which is used).
+  * `message` - the commit message, stripped to the first line.
+  * `date` - The commit date, in the rfc822 format.
+- `old` - the line, currently defining the dependency in the dependencies file.
+- `new` - the newly generated entry in the dependencies file, pointing to the new revision.
+
+For more information, please consult [the jinja2 documentation](http://jinja.pocoo.org/docs/2.9/).
+
 ## Help
 
 Depup comes with an integrated help page. The full page:
