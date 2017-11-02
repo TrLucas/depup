@@ -138,7 +138,7 @@ Subcommands:
 
 ```
 usage: depup diff [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
-                  [-m LOCAL_MIRROR] [-u] [-n UNIFIED_LINES]
+                  [-m LOCAL_MIRROR] [-n UNIFIED_LINES]
                   dependency
 
 optional arguments:
@@ -169,7 +169,6 @@ Shared options:
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
                         source parsed from the dependencies file is used.
-  -u, --update          Update the local dependencies to the new revisions.
 
 ```
 
@@ -177,7 +176,7 @@ Shared options:
 
 ```
 usage: depup changes [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
-                     [-m LOCAL_MIRROR] [-u]
+                     [-m LOCAL_MIRROR]
                      dependency
 
 optional arguments:
@@ -205,7 +204,6 @@ Shared options:
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
                         source parsed from the dependencies file is used.
-  -u, --update          Update the local dependencies to the new revisions.
 
 ```
 
@@ -213,7 +211,7 @@ Shared options:
 
 ```
 usage: depup issue [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
-                   [-m LOCAL_MIRROR] [-u] [-t TMPL_PATH]
+                   [-m LOCAL_MIRROR] [-t TMPL_PATH]
                    dependency
 
 optional arguments:
@@ -244,6 +242,5 @@ Shared options:
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
                         source parsed from the dependencies file is used.
-  -u, --update          Update the local dependencies to the new revisions.
 
 ```

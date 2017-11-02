@@ -146,11 +146,6 @@ class DepUpdate(object):
                       'given, the source parsed from the dependencies file is '
                       'used.')
         )
-        shared.add_argument(
-                '-u', '--update', action='store_true',
-                dest='update_dependencies',
-                help='Update the local dependencies to the new revisions.'
-        )
 
         subs = parser.add_subparsers(
                 title='Subcommands', dest='action',
@@ -263,7 +258,8 @@ class DepUpdate(object):
         context['repository'] = self.arguments.dependency
         context['issue_ids'] = self.parsed_changes['issue_ids']
         context['noissues'] = self.parsed_changes['noissues']
-        context['old'], context['new'] = self._build_dep_entries()
+        context['hg_hash'] = self.changes[0]['hg_hash']
+        context['git_hash'] = self.changes[0]['git_hash']
 
         path, filename = os.path.split(self.arguments.tmpl_path)
 
@@ -308,6 +304,8 @@ class DepUpdate(object):
         root_conf = self._dep_config['_root']
         config = self.dep_config[self.arguments.dependency]
 
+        # The fallback / main source paths for a repository are given in the
+        # dependencies file's _root section.
         keys = ['hg', 'git']
         possible_sources = {}
         possible_sources.update({
@@ -315,6 +313,7 @@ class DepUpdate(object):
             for key in keys
         })
 
+        # Any dependency may specify a custom source location.
         possible_sources.update({
             key: source for key, source in [
                 (key, config.get(key, (None, None))[0]) for key in keys
@@ -326,6 +325,9 @@ class DepUpdate(object):
     def _mirror_location(self):
         possible_sources = self._possible_sources()
         mirror_ex = self._main_vcs._other_cls.EXECUTABLE
+
+        # If the user specified a local mirror, use it. Otherwise use the
+        # mirror, which was specified in the dependencies file.
         if self.arguments.local_mirror:
             mirror = self.arguments.local_mirror
         else:
@@ -334,74 +336,6 @@ class DepUpdate(object):
                     mirror = possible_sources[key]
                     break
         return mirror
-
-    def _build_dep_entries(self):
-        """Build the current and new string of dependencies file."""
-        config = self.dep_config[self.arguments.dependency]
-
-        remote_repository_name, none_hash_rev = config.get('*', (None, None))
-
-        current = '{} = {}'.format(self.arguments.dependency,
-                                   remote_repository_name)
-
-        possible_sources = self._possible_sources()
-
-        current_dep_strings = {}
-
-        for key in ['hg', 'git']:
-            tmp_dep = key + ':'
-            _, rev = config.get(key, (None, None))
-            if key in possible_sources:
-                tmp_dep = '{}{}@'.format(tmp_dep, possible_sources[key])
-
-            if rev:
-                tmp_dep += rev
-            current_dep_strings[key] = tmp_dep
-
-        if none_hash_rev:
-            current = ' '.join([current, none_hash_rev])
-        else:
-            current = ' '.join(
-                    [current, ] +
-                    [current_dep_strings.get(x, '') for x in ['hg', 'git']]
-            ).strip()
-
-        if self.arguments.tag_mode:
-            new = '{} = {} {}'.format(
-                self.arguments.dependency,
-                remote_repository_name,
-                self.arguments.new_revision,
-            )
-        else:
-            main_ex = self._main_vcs.EXECUTABLE
-            mirror_ex = self._main_vcs._other_cls.EXECUTABLE
-
-            hashes = {
-                main_ex: self.changes[0][main_ex + '_hash'],
-                mirror_ex: self.changes[0][mirror_ex + '_hash'],
-            }
-
-            for key in [main_ex, mirror_ex]:
-                if key in possible_sources:
-                    hashes[key] = '{}@{}'.format(possible_sources[key],
-                                                 hashes[key])
-
-            new = '{} = {} hg:{hg} git:{git}'.format(
-                self.arguments.dependency, remote_repository_name, **hashes)
-
-        return current, new
-
-    def update_dependencies_file(self):
-        """Update the local dependencies file to contain the new revision."""
-        current, new = self._build_dep_entries()
-
-        dependency_path = os.path.join(self._cwd, 'dependencies')
-
-        with io.open(dependency_path, 'r', encoding='utf-8') as fp:
-            current_deps = fp.read()
-
-        with io.open(dependency_path, 'w', encoding='utf-8') as fp:
-            fp.write(current_deps.replace(current, new))
 
     def __call__(self):
         """Let this class's objects be callable, run all desired tasks."""
@@ -412,9 +346,6 @@ class DepUpdate(object):
         }
         if self.arguments.lookup_inotes:
             self.lookup_integration_notes()
-
-        if self.arguments.update_dependencies:
-            self.update_dependencies_file()
 
         output = action_map[self.arguments.action]()
         if self.arguments.filename is not None:

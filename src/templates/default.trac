@@ -14,12 +14,10 @@ The list of changes imported by this is:
 {% endfor %}
 
 === What to change ===
-Update the `{{ repository }}` dependency
+Update the `{{ repository }}` dependency to:
 
-**from**:
-`{{ old }}`
-**to**:
-`{{ new }}`
+|| **mercurial** || **git** ||
+|| {{ hg_hash }} || {{ git_hash }} ||
 
 === Integration Notes ===
 
