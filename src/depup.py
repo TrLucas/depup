@@ -87,6 +87,10 @@ class DepUpdate(object):
                 print('WARNING: you are trying to downgrade the dependency!',
                       file=sys.stderr)
 
+        self._main_vcs.enhance_changes_information(
+            self.changes, os.path.join(self._mirror_location(),
+                                       self.arguments.dependency))
+
     def _make_arguments(self, default_template, *args):
         """Initialize the argument parser and store the arguments."""
         parser = argparse.ArgumentParser(
@@ -218,8 +222,10 @@ class DepUpdate(object):
             else:
                 noissues.append(change)
                 if not self.NOISSUE_REGEX.search(change['message']):
-                    msg = ('warning: no issue reference in commit message: '
-                           '"{message}" (commit {hash})\n').format(**change)
+                    msg = (
+                        'warning: no issue reference in commit message: '
+                        '"{message}" (commit {hg_hash} | {git_hash})\n'
+                    ).format(**change)
                     print(msg, file=sys.stderr)
 
         return issue_ids, noissues
@@ -289,13 +295,44 @@ class DepUpdate(object):
     def build_changes(self):
         """Write a descriptive list of the changes to STDOUT."""
         return os.linesep.join(
-            ['( {hash} ) : {message} (by {author})'.format(**change)
-             for change in self.changes]
+            [(
+                '( hg:{hg_hash} | git:{git_hash} ) : {message} (by {author})'
+             ).format(**change) for change in self.changes]
         )
+
+    def _possible_sources(self):
+        root_conf = self._dep_config['_root']
+        config = self.dep_config[self.arguments.dependency]
+
+        keys = ['hg', 'git']
+        possible_sources = {}
+        possible_sources.update({
+            key + '_root': root_conf[key]
+            for key in keys
+        })
+
+        possible_sources.update({
+            key: source for key, source in [
+                (key, config.get(key, (None, None))[0]) for key in keys
+            ] if source is not None
+        })
+
+        return possible_sources
+
+    def _mirror_location(self):
+        possible_sources = self._possible_sources()
+        mirror_ex = self._main_vcs._other_cls.EXECUTABLE
+        if self.arguments.local_mirror:
+            mirror = self.arguments.local_mirror
+        else:
+            for key in [mirror_ex, mirror_ex + '_root']:
+                if key in possible_sources:
+                    mirror = possible_sources[key]
+                    break
+        return mirror
 
     def _build_dep_entry(self):
         """Build the current and new string of dependencies file."""
-        root_conf = self._dep_config['_root']
         config = self.dep_config[self.arguments.dependency]
 
         remote_repository_name, none_hash_rev = config.get('*', (None, None))
@@ -303,21 +340,15 @@ class DepUpdate(object):
         current = '{} = {}'.format(self.arguments.dependency,
                                    remote_repository_name)
 
-        possible_sources = {
-            'hg_root': os.path.join(root_conf['hg'],
-                                    self.arguments.dependency),
-            'git_root': os.path.join(root_conf['git'],
-                                     self.arguments.dependency),
-        }
+        possible_sources = self._possible_sources()
 
         current_dep_strings = {}
 
         for key in ['hg', 'git']:
             tmp_dep = key + ':'
-            source, rev = config.get(key, (None, None))
-            if source:
-                possible_sources[key] = source
-                tmp_dep = '{}{}@'.format(tmp_dep, source)
+            _, rev = config.get(key, (None, None))
+            if key in possible_sources:
+                tmp_dep = '{}{}@'.format(tmp_dep, possible_sources[key])
 
             if rev:
                 tmp_dep += rev
@@ -341,22 +372,10 @@ class DepUpdate(object):
             main_ex = self._main_vcs.EXECUTABLE
             mirror_ex = self._main_vcs._other_cls.EXECUTABLE
 
-            if self.arguments.local_mirror:
-                mirror = self.arguments.local_mirror
-            else:
-                for key in [mirror_ex, mirror_ex + '_root']:
-                    if key in possible_sources:
-                        mirror = possible_sources[key]
-                        break
-
             hashes = {
-                main_ex: self.changes[0]['hash'],
-                mirror_ex: self._main_vcs.mirrored_hash(
-                       self.changes[0]['author'],
-                       self.changes[0]['date'],
-                       self.changes[0]['message'],
-                       mirror),
-                }
+                main_ex: self.changes[0][main_ex + '_hash'],
+                mirror_ex: self.changes[0][mirror_ex + '_hash'],
+            }
 
             for key in [main_ex, mirror_ex]:
                 if key in possible_sources:
