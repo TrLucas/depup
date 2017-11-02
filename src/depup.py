@@ -63,11 +63,12 @@ class DepUpdate(object):
             os.path.dirname(os.path.realpath(__file__)), 'templates',
             'default.trac')
 
+        # Initialize and run the internal argument parser
         self._make_arguments(default_template, *args)
 
+        # Initialize the main VCS and the list of changes
         self._main_vcs = Vcs.factory(os.path.join(self._cwd,
                                      self.arguments.dependency))
-
         self.changes = self._main_vcs.change_list(self.base_revision,
                                                   self.arguments.new_revision)
         if len(self.changes) == 0:
@@ -88,8 +89,11 @@ class DepUpdate(object):
                       file=sys.stderr)
 
         self._main_vcs.enhance_changes_information(
-            self.changes, os.path.join(self._mirror_location(),
-                                       self.arguments.dependency))
+            self.changes,
+            os.path.join(self._mirror_location(),
+                         self.arguments.dependency),
+            self.arguments.skip_mirror,
+        )
 
     def _make_arguments(self, default_template, *args):
         """Initialize the argument parser and store the arguments."""
@@ -103,25 +107,25 @@ class DepUpdate(object):
         shared.add_argument(
                 'dependency',
                 help=('The dependency to be updated, as specified in the '
-                      'dependencies file.'),
+                      'dependencies file.')
         )
         shared.add_argument(
                 '-r', '--revision', dest='new_revision',
                 default=self.DEFAULT_NEW_REVISION,
                 help=('The revision to update to. Defaults to the remote '
                       'master bookmark/branch. Must be accessible by the '
-                      "dependency's vcs."),
+                      "dependency's vcs.")
         )
         shared.add_argument(
                 '-a', '--ambiguous', action='store_true', default=False,
                 dest='tag_mode',
                 help=('Use possibly ambiguous revisions, such as tags, '
-                      'bookmarks, branches.'),
+                      'bookmarks, branches.')
         )
         shared.add_argument(
                 '-f', '--filename', dest='filename', default=None,
                 help=("When specified, write the subcommand's output to the "
-                      'given, rather than to STDOUT.')
+                      'given file, rather than to STDOUT.')
         )
         shared.add_argument(
                 '-l', '--lookup-integration-notes', action='store_true',
@@ -129,19 +133,23 @@ class DepUpdate(object):
                 help=('Search https://issues.adblockplus.org for integration '
                       'notes associated with the included issue IDs. The '
                       'results are written to STDERR. CAUTION: This is a very '
-                      'network heavy operation.'),
+                      'network heavy operation.')
+        )
+        shared.add_argument(
+                '-s', '--skip-mirror', action='store_true', dest='skip_mirror',
+                help='Do not use any mirror.'
         )
         shared.add_argument(
                 '-m', '--mirrored-repository', dest='local_mirror',
                 help=('Path to the local copy of a mirrored repository. '
                       'Used to fetch the corresponding hash. If not '
                       'given, the source parsed from the dependencies file is '
-                      'used.'),
+                      'used.')
         )
         shared.add_argument(
                 '-u', '--update', action='store_true',
                 dest='update_dependencies',
-                help='Update the local dependencies to the new revisions.',
+                help='Update the local dependencies to the new revisions.'
         )
 
         subs = parser.add_subparsers(
@@ -156,7 +164,7 @@ class DepUpdate(object):
                 '-n', '--n-context-lines', dest='unified_lines', type=int,
                 default=16,
                 help=('Number of unified context lines to be added to the '
-                      'diff. Defaults to 16 (Used only with -d/--diff).'),
+                      'diff. Defaults to 16 (Used only with -d/--diff).')
         )
 
         # Add the command and options for creating an issue body
@@ -165,12 +173,7 @@ class DepUpdate(object):
                 '-t', '--template', dest='tmpl_path',
                 default=default_template,
                 help=('The template to use. Defaults to the provided '
-                      'default.trac (Used only with -i/--issue).'),
-        )
-        issue_parser.add_argument(
-                '-v', '--vcs-format', dest='format', choices=['hg', 'git'],
-                help=('Hash format to be used for changes, which could not be '
-                      'associated with an issue. Defaults to "hg".'),
+                      'default.trac (Used only with -i/--issue).')
         )
 
         # Add the command for printing a list of changes
@@ -194,6 +197,7 @@ class DepUpdate(object):
         if self._dep_config is None:
             dependencies_script = os.path.join(
                 os.path.dirname(os.path.realpath(__file__)), 'dependencies.py')
+
             dep_json = subprocess.check_output(
                 ['python2', dependencies_script]
             ).decode('utf-8')
@@ -259,7 +263,7 @@ class DepUpdate(object):
         context['repository'] = self.arguments.dependency
         context['issue_ids'] = self.parsed_changes['issue_ids']
         context['noissues'] = self.parsed_changes['noissues']
-        context['old'], context['new'] = self._build_dep_entry()
+        context['old'], context['new'] = self._build_dep_entries()
 
         path, filename = os.path.split(self.arguments.tmpl_path)
 
@@ -331,7 +335,7 @@ class DepUpdate(object):
                     break
         return mirror
 
-    def _build_dep_entry(self):
+    def _build_dep_entries(self):
         """Build the current and new string of dependencies file."""
         config = self.dep_config[self.arguments.dependency]
 
@@ -389,7 +393,7 @@ class DepUpdate(object):
 
     def update_dependencies_file(self):
         """Update the local dependencies file to contain the new revision."""
-        current, new = self._build_dep_entry()
+        current, new = self._build_dep_entries()
 
         dependency_path = os.path.join(self._cwd, 'dependencies')
 

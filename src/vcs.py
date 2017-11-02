@@ -83,26 +83,35 @@ class Vcs(object):
         changes = self.run_cmd(*('log',) + log_format + rev_cmd)
         return self._changes_as_json(changes)
 
-    def enhance_changes_information(self, changes, dependency_location):
+    def enhance_changes_information(self, changes, dependency_location, fake):
         """CHANGE ME."""
-        with self._other_cls(dependency_location) as mirror:
-            mirror._get_latest()
-            self_ex = self.EXECUTABLE
-            mirr_ex = mirror.EXECUTABLE
-            for change in changes:
-                mirrored_hash = mirror.matching_hash(change['author'],
-                                                     change['date'],
-                                                     change['message'])
+        self_ex = self.EXECUTABLE
+        mirr_ex = self._other_cls.EXECUTABLE
 
-                change[self_ex + '_url'] = self.REVISION_URL.format(
-                        repository=self._repository, revision=change['hash'])
-                change[self_ex + '_hash'] = change['hash']
+        if not fake:
+            with self._other_cls(dependency_location) as mirror:
+                mirror._get_latest()
 
-                del change['hash']
+                mirrored_hashes = {
+                        change['hash']: mirror.matching_hash(change['author'],
+                                                             change['date'],
+                                                             change['message'])
+                        for change in changes
+                }
+        else:
+            mirrored_hashes = {}
 
-                change[mirr_ex + '_url'] = mirror.REVISION_URL.format(
-                        repository=self._repository, revision=mirrored_hash)
-                change[mirr_ex + '_hash'] = mirrored_hash
+        for change in changes:
+            change[self_ex + '_url'] = self.REVISION_URL.format(
+                    repository=self._repository, revision=change['hash'])
+            change[self_ex + '_hash'] = change['hash']
+
+            mirrored_hash = mirrored_hashes.get(change['hash'], 'NO MIRROR')
+            del change['hash']
+
+            change[mirr_ex + '_url'] = self._other_cls.REVISION_URL.format(
+                    repository=self._repository, revision=mirrored_hash)
+            change[mirr_ex + '_hash'] = mirrored_hash
 
     @staticmethod
     def factory(cwd):

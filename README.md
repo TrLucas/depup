@@ -137,7 +137,7 @@ Subcommands:
 ### diff
 
 ```
-usage: depup diff [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
+usage: depup diff [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
                   [-m LOCAL_MIRROR] [-u] [-n UNIFIED_LINES]
                   dependency
 
@@ -158,12 +158,13 @@ Shared options:
                         bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
-                        given, rather than to STDOUT.
+                        given file, rather than to STDOUT.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
+  -s, --skip-mirror     Do not use any mirror.
   -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
@@ -175,7 +176,7 @@ Shared options:
 ### changes
 
 ```
-usage: depup changes [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
+usage: depup changes [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
                      [-m LOCAL_MIRROR] [-u]
                      dependency
 
@@ -193,12 +194,13 @@ Shared options:
                         bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
-                        given, rather than to STDOUT.
+                        given file, rather than to STDOUT.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
+  -s, --skip-mirror     Do not use any mirror.
   -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
@@ -210,8 +212,8 @@ Shared options:
 ### issue
 
 ```
-usage: depup issue [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l]
-                   [-m LOCAL_MIRROR] [-u] [-t TMPL_PATH] [-v {hg,git}]
+usage: depup issue [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
+                   [-m LOCAL_MIRROR] [-u] [-t TMPL_PATH]
                    dependency
 
 optional arguments:
@@ -219,9 +221,6 @@ optional arguments:
   -t TMPL_PATH, --template TMPL_PATH
                         The template to use. Defaults to the provided
                         default.trac (Used only with -i/--issue).
-  -v {hg,git}, --vcs-format {hg,git}
-                        Hash format to be used for changes, which could not be
-                        associated with an issue. Defaults to "hg".
 
 Shared options:
   dependency            The dependency to be updated, as specified in the
@@ -234,12 +233,13 @@ Shared options:
                         bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
-                        given, rather than to STDOUT.
+                        given file, rather than to STDOUT.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
+  -s, --skip-mirror     Do not use any mirror.
   -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the

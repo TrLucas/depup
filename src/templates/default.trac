@@ -10,7 +10,7 @@ The list of changes imported by this is:
 ,order=id,desc=1,format=table,col=summary|component)]]
 
 {% for change in noissues -%}
-|| [{{ change.git_url }} {{ change.git_hash }}] || {{ change.message }} || {{ change.author }} ||
+|| [{{ change.hg_url }} {{ change.hg_hash }}] || {{ change.message }} || {{ change.author }} ||
 {% endfor %}
 
 === What to change ===
