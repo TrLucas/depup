@@ -11,15 +11,24 @@ import tempfile
 
 
 class Vcs(object):
-    """CHANGE ME."""
+    """Baseclass for Git and Mercurial."""
 
     JSON_DQUOTES = '__DQ__'
 
     class VcsException(Exception):
-        """CHANGE ME."""
+        """Raised when no distinct VCS for a given repository was found."""
 
     def __init__(self, location):
-        """CHANGE ME."""
+        """Construct a Vcs object for a given location.
+
+        parameters:
+          location: The repository location, may be a local folder or a remote
+                    location.
+
+        When the specified location does not exist locally, Vcs will attempt
+        to create a temporary repository, cloned from the given location.
+
+        """
         self._source, self._repository = os.path.split(location)
         if not os.path.exists(location):
             self._make_temporary(location)
@@ -29,17 +38,17 @@ class Vcs(object):
             self._clean_up = False
 
     def __enter__(self):
-        """CHANGE ME."""
+        """Enter the object's context."""
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        """CHANGE ME."""
+        """Exit the object'c context and delete any temporary data."""
         if self._clean_up:
             shutil.rmtree(self._cwd)
 
     @classmethod
     def is_vcs_for_repo(cls, path):
-        """CHANGE ME."""
+        """Assert if cls is a suitable VCS for the given (repository-) path."""
         return os.path.exists(os.path.join(path, cls.VCS_REQUIREMENT))
 
     def run_cmd(self, *args, **kwargs):
@@ -69,12 +78,25 @@ class Vcs(object):
             )))
 
     def merged_diff(self, rev_a, rev_b, n_unified=16):
-        """CHANGE ME."""
+        """Invoke the VCS' functionality to create a unified diff.
+
+        Parameters:
+            rev_a: The revision representing the start.
+            rev_b: The revision representing the end.
+            n_unified: The amount of context lines to add to the diff.
+
+        """
         return self.run_cmd('diff', '--unified=' + str(n_unified),
                             *(self._rev_comb(rev_a, rev_b)))
 
     def change_list(self, rev_a, rev_b):
-        """CHANGE ME."""
+        """Return the repository's history from revisions a to b as JSON.
+
+        Parameters:
+            rev_a: The revision representing the start.
+            rev_b: The revision representing the end.
+
+        """
         self._get_latest()
 
         log_format = self._log_format()
@@ -84,7 +106,19 @@ class Vcs(object):
         return self._changes_as_json(changes)
 
     def enhance_changes_information(self, changes, dependency_location, fake):
-        """CHANGE ME."""
+        """Enhance the change list with matching revisions from a mirror.
+
+        Parameters:
+            changes:             The list to enhance, containing dictionaries
+                                 with the keys "hash", "author", "date" and
+                                 "message".
+            dependency_location: The (remote or locale) location of the
+                                 repository, which is supposed to be the mirror
+                                 for the current repository.
+            fake {True, False}:  Causes atual processing of a mirror repository
+                                 (False) or fakes values (True)
+
+        """
         self_ex = self.EXECUTABLE
         mirr_ex = self._other_cls.EXECUTABLE
 
@@ -114,23 +148,23 @@ class Vcs(object):
             change[mirr_ex + '_hash'] = mirrored_hash
 
     @staticmethod
-    def factory(cwd):
-        """CHANGE ME."""
+    def factory(location):
+        """Get a suiting Vcs instance for the given repository path."""
         obj = None
         for cls in [Git, Mercurial]:
-            if cls.is_vcs_for_repo(cwd):
+            if cls.is_vcs_for_repo(location):
                 if obj is not None:
                     raise Vcs.VcsException(
-                            "Found multiple possible VCS' for " + cwd)
-                obj = cls(cwd)
+                            "Found multiple possible VCS' for " + location)
+                obj = cls(location)
 
         if obj is None:
-            raise Vcs.VcsException('No valid VCS found for ' + cwd)
+            raise Vcs.VcsException('No valid VCS found for ' + location)
         return obj
 
 
 class Mercurial(Vcs):
-    """CHANGE ME."""
+    """Mercurial specialization of VCS."""
 
     EXECUTABLE = 'hg'
     VCS_REQUIREMENT = '.hg'
@@ -143,10 +177,10 @@ class Mercurial(Vcs):
 
     REVISION_URL = 'https://hg.adblockplus.org/{repository}/rev/{revision}'
 
-    def __init__(self, cwd):
-        """CHANGE ME."""
+    def __init__(self, *args):
+        """Construct a Mercurial object and specify Git as the mirror class."""
         self._other_cls = Git
-        super(Mercurial, self).__init__(cwd)
+        super(Mercurial, self).__init__(*args)
 
     def _rev_comb(self, rev_a, rev_b):
         # Only take into account those changesets, which are actually affecting
@@ -159,14 +193,19 @@ class Mercurial(Vcs):
         return ('--template', log_format)
 
     def change_list(self, *args):
-        """CHANGE ME."""
-        # Mercurial's conmmand for producing a log between revisions using the
+        """Apply measures for hg log and call Vcs's change_list."""
+        # Mercurial's command for producing a log between revisions using the
         # revision set produced by self._rev_comb returns the changesets in a
-        # reversed order. Additoinally the current revision is returned.
+        # reversed order. Additionally the current revision is returned.
         return list(reversed(super(Mercurial, self).change_list(*args)[1:]))
 
     def matching_hash(self, author, date, message):
-        """CHANGE ME."""
+        """Get the responsible commit for the given information.
+
+        A commit must stafisy equailty for auth, date and commit message, in
+        order to be recognized as the matching commit.
+
+        """
         return self.run_cmd('log', '-u', author, '-d', date, '--keyword',
                             message, '--template', '{node|short}')
 
@@ -180,7 +219,7 @@ class Mercurial(Vcs):
 
 
 class Git(Vcs):
-    """CHANGE ME."""
+    """Git specialization of Vcs."""
 
     EXECUTABLE = 'git'
     VCS_REQUIREMENT = '.git'
@@ -191,10 +230,10 @@ class Git(Vcs):
     REVISION_URL = ('https://www.github.com/adblockplus/{repository}/commit/'
                     '{revision}')
 
-    def __init__(self, cwd):
-        """CHANGE ME."""
+    def __init__(self, *args):
+        """Construct a Git object and specify Mercurial as the mirror class."""
         self._other_cls = Mercurial
-        super(Git, self).__init__(cwd)
+        super(Git, self).__init__(*args)
 
     def _rev_comb(self, rev_a, rev_b):
         return ('{}..{}'.format(rev_a, rev_b),)
@@ -204,7 +243,14 @@ class Git(Vcs):
             '"', self.JSON_DQUOTES)),)
 
     def matching_hash(self, author, date, message):
-        """CHANGE ME."""
+        """Get the responsible commit for the given information.
+
+        A commit must stafisy equailty for auth, date and commit message, in
+        order to be recognized as the matching commit.
+
+        """
+        # Git does not implement exact date matching directly, therefore we
+        # need to filter for "not before" and "not after" the given time.
         return self.run_cmd('log', '--author={}'.format(author),
                             '--grep={}'.format(message), '--not',
                             '--before={}'.format(date), '--not',

@@ -33,9 +33,6 @@ class DepUpdate(object):
 
     """
 
-    class MirrorException(Exception):
-        """Represents errors while processing a git mirror."""
-
     VCS_EXECUTABLE = ('hg', '--config', 'defaults.log=', '--config',
                       'defaults.pull=')
     DEFAULT_NEW_REVISION = 'master'
@@ -45,6 +42,10 @@ class DepUpdate(object):
 
     def __init__(self, *args):
         """Construct a DepUpdate object.
+
+        During initialization, DepUpdate will invoke the appropriate VCS to
+        fetch a list of changes, parse them and (if not otherwise specified)
+        get the matching revisions from the mirrored repository.
 
         Parameters: *args - Passed down to the argparse.ArgumentParser instance
 
@@ -76,14 +77,7 @@ class DepUpdate(object):
                     self.arguments.new_revision,
                     self.base_revision
             )
-            if len(self.changes) == 0:
-                print(
-                    ('NO CHANGES FOUND. You are either trying to update to a '
-                     'revision, which the dependency already is at - or '
-                     'something went wrong while executing the vcs. Exiting.'),
-                    file=sys.stderr)
-                exit(1)
-            else:
+            if len(self.changes) > 0:
                 # reverse mode. Uh-oh.
                 print('WARNING: you are trying to downgrade the dependency!',
                       file=sys.stderr)
@@ -185,9 +179,9 @@ class DepUpdate(object):
         ensure_dependencies.py and dependencies exist.
 
         However, ensure_dependencies is currently only compatible with python2.
-        Due to this we invoke a python2 interpreter to run our dependencies.py,
-        which runs ensure_dependencies.read_deps() and returns the output as
-        JSON data.
+        Due to this we explicitly invoke a python2 interpreter to run our
+        dependencies.py, which runs ensure_dependencies.read_deps() and returns
+        the output as JSON data.
         """
         if self._dep_config is None:
             dependencies_script = os.path.join(
@@ -235,9 +229,10 @@ class DepUpdate(object):
 
         Returns a dictionary, containing the following two key/value pairs:
         'issue_ids': a list of issue IDs (as seen on
-            https://issues.adblockplus.org/)
+                     https://issues.adblockplus.org/)
         'noissues': The remaining changes, with all original information (see
-            DepUpdate.changes) which could not be associated with any issue.
+                    DepUpdate.changes) which could not be associated with any
+                    issue.
         """
         if self._parsed_changes is None:
             self._parsed_changes = {}
@@ -344,6 +339,13 @@ class DepUpdate(object):
             'changes': self.build_changes,
             'issue': self.build_issue,
         }
+
+        if len(self.changes) == 0:
+            print('NO CHANGES FOUND. You are either trying to update to a '
+                  'revision, which the dependency already is at - or '
+                  'something went wrong while executing the vcs.')
+            return
+
         if self.arguments.lookup_inotes:
             self.lookup_integration_notes()
 
