@@ -1,0 +1,14 @@
+# HG changeset patch
+# User Tristan Lucas <tristan@adblockplus.org>
+# Date 1509618070 -3600
+#      Thu Nov 02 11:21:10 2017 +0100
+# Node ID 154a36d8d5f47143efabf0225ccb851103beb755
+# Parent  ddeb09df79a3318a515c940a088195931b8c6cd4
+Thid commit, splitting the b'ranch
+
+diff --git a/foobar.txt b/foobar.txt
+new file mode 100644
+--- /dev/null
++++ b/foobar.txt
+@@ -0,0 +1,1 @@
++Separating the branch

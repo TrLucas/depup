@@ -38,7 +38,7 @@ class Vcs(object):
     class VcsException(Exception):
         """Raised when no distinct VCS for a given repository was found."""
 
-    def __init__(self, location):
+    def __init__(self, location, force_clone=False):
         """Construct a Vcs object for a given location.
 
         parameters:
@@ -50,7 +50,7 @@ class Vcs(object):
 
         """
         self._source, self._repository = os.path.split(location)
-        if not os.path.exists(location):
+        if not os.path.exists(location) or force_clone:
             self._make_temporary(location)
             self._clean_up = True
         else:
@@ -171,7 +171,7 @@ class Vcs(object):
             change[mirr_ex + '_hash'] = mirrored_hash
 
     @staticmethod
-    def factory(location):
+    def factory(location, force_clone=False):
         """Get a suiting Vcs instance for the given repository path."""
         obj = None
         for cls in [Git, Mercurial]:
@@ -179,7 +179,7 @@ class Vcs(object):
                 if obj is not None:
                     raise Vcs.VcsException(
                             "Found multiple possible VCS' for " + location)
-                obj = cls(location)
+                obj = cls(location, force_clone)
 
         if obj is None:
             raise Vcs.VcsException('No valid VCS found for ' + location)
@@ -226,7 +226,7 @@ class Mercurial(Vcs):
     def matching_hash(self, author, date, message):
         """Get the responsible commit for the given information.
 
-        A commit must stafisy equailty for auth, date and commit message, in
+        A commit must stafisy equailty for author, date and commit message, in
         order to be recognized as the matching commit.
 
         """
@@ -283,16 +283,23 @@ class Git(Vcs):
     def matching_hash(self, author, date, message):
         """Get the responsible commit for the given information.
 
-        A commit must stafisy equailty for auth, date and commit message, in
+        A commit must stafisy equailty for author, date and commit message, in
         order to be recognized as the matching commit.
 
         """
-        # Git does not implement exact date matching directly, therefore we
-        # need to filter for "not before" and "not after" the given time.
-        return self.run_cmd('log', '--author={}'.format(author),
-                            '--grep={}'.format(message), '--not',
-                            '--before={}'.format(date), '--not',
-                            '--after={}'.format(date), '--pretty=format:%h')
+        # Git does not implement exact date matching directly. Additionally,
+        # git is only capable of filtering by COMMIT DATE instead of
+        # AUTHOR DATE (which is what we are actually looking for), see
+        # https://stackoverflow.com/q/37311494/
+        # Since naturally the COMMIT DATE allways is later then the AUTHOR
+        # DATE, we are at least able to limit the valid range to after our
+        # given date
+        result = self.run_cmd('log', '--author={}'.format(author),
+                              '--grep={}'.format(message),
+                              '--after={}'.format(date), '--pretty=format:%h')
+        if len(result.split()) > 1:
+            raise Vcs.VcsException('FATAL: Ambiguous commit filter!')
+        return result
 
     def _make_temporary(self, location):
         self._cwd = tempfile.mkdtemp()
