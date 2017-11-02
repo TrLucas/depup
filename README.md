@@ -2,12 +2,9 @@
 
 ## Trivial
 
-Since there won't be any way to bridge submodules / subrepositories between git
-and mercurial any time soon, we will stay dependent on a manual approach for
-mirroring these ourselves.
+Since there won't be any way to bridge submodules / subrepositories between git and mercurial any time soon, we will stay dependent on a manual approach for mirroring these ourselves.
 
-This program is meant to be pure convenience for those, who find themselves in
-the need to update a project's dependency.
+This program is meant to be pure convenience for those, who find themselves in the need to update a project's dependency.
 
 ## Requirements
 
@@ -30,6 +27,10 @@ $ python setup.py install
 
 _Please note: setup.py will additionally install [jinja2](http://jinja.pocoo.org/docs/2.9/) on your machine._
 
+## Limitations
+
+Mainly due to humans being involved in reporting issues, there is no guarantee that looking up integration notes will find everything that is needed to be done, in order to update to a new revision.
+
 ## Running the programm
 
 Simply call the executable inside a repository which as dependencies.
@@ -46,28 +47,30 @@ $ depup changes adblockpluscore
 
 ```
 
-### Generate a bare issue body with an ambiguous tag, rather than hashes
+### Generate a bare issue body, but explicitly skip any mirroring 
 
 ```
-$ depup issue adblockpluscore -r master -a
+$ depup issue adblockpluscore -r master -s
+
 === Background ===
 
 CHANGE ME!
 
 === Included changes in `adblockpluscore` ===
 The list of changes imported by this is:
-[[TicketQuery(id=5147&id=5160,order=id,desc=1,format=table,col=summary|component)]]
+[[TicketQuery(id=5728&id=5773&id=5797&id=5735,order=id,desc=1,format=table,col=summary|component)]]
 
 || [https://hg.adblockplus.org/adblockpluscore/rev/dbfc37143497 dbfc37143497] || Noissue - Fix the escaping of '{' and '}' in CSS selectors || Hubert Figuière ||
+|| [https://hg.adblockplus.org/adblockpluscore/rev/b21bddce2678 b21bddce2678] || Noissue - Fixed typo with getLocalizedTexts function || Dave Barker ||
+|| [https://hg.adblockplus.org/adblockpluscore/rev/a1b481e7d728 a1b481e7d728] || Noissue - Updated recommended subscriptions || Wladimir Palant ||
+|| [https://hg.adblockplus.org/adblockpluscore/rev/fb758f96f7bb fb758f96f7bb] || Noissue - rename variable 'ret' to more meaningful 'filter' in lib/filterClasses.js || Sergei Zabolotskikh ||
 
 
 === What to change ===
-Update the `adblockpluscore` dependency
+Update the `adblockpluscore` dependency to:
 
-**from**:
-`adblockpluscore = adblockpluscore hg:b21bddce2678 git:2b57122`
-**to**:
-`adblockpluscore = adblockpluscore master`
+|| **mercurial** || **git** ||
+|| dbfc37143497 || NO MIRROR ||
 
 === Integration Notes ===
 
@@ -102,11 +105,14 @@ There are at any time these values exposed to the template:
 - `issue_ids` - A list of encountered Issue ids or an empty array.
 - `noissues` - Changes which could not be associated with an issue id. Either an empty array, or a list of dictionaries, each containg the following key/value pairs:
   * `author` - the author of the commit.
-  * `hash` - the hash of the commit (format depends on the VCS which is used).
   * `message` - the commit message, stripped to the first line.
   * `date` - The commit date, in the rfc822 format.
-- `old` - the line, currently defining the dependency in the dependencies file.
-- `new` - the newly generated entry in the dependencies file, pointing to the new revision.
+  * `git_hash` - the git hash of the commit, (mirrored if root VCS is mercurial, 'NO MIRROR' if mirroring was skipped)
+  * `git_url` - the revisions' url @ www.github.com
+  * `hg_hash` - the mercurial hash of the commit, (mirrored if root VCS is git, 'NO MIRROR' if mirroring was skipped)
+  * `hg_url` - the revisions url @ hg.adblockplus.org
+- `hg_hash` - the mercurial hash for the new revision ('NO MIRROR' if mercurial is the mirror's vcs and mirroring is skipped)
+- `git_hash` the git hash for the new revision ('NO MIRROR' if git is the mirror's vcs and mirroring is skipped)
 
 For more information, please consult [the jinja2 documentation](http://jinja.pocoo.org/docs/2.9/).
 
@@ -137,7 +143,7 @@ Subcommands:
 ### diff
 
 ```
-usage: depup diff [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
+usage: depup diff [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                   [-m LOCAL_MIRROR] [-n UNIFIED_LINES]
                   dependency
 
@@ -154,8 +160,6 @@ Shared options:
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
-  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
-                        bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
@@ -175,7 +179,7 @@ Shared options:
 ### changes
 
 ```
-usage: depup changes [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
+usage: depup changes [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                      [-m LOCAL_MIRROR]
                      dependency
 
@@ -189,8 +193,6 @@ Shared options:
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
-  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
-                        bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
@@ -210,7 +212,7 @@ Shared options:
 ### issue
 
 ```
-usage: depup issue [-h] [-r NEW_REVISION] [-a] [-f FILENAME] [-l] [-s]
+usage: depup issue [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                    [-m LOCAL_MIRROR] [-t TMPL_PATH]
                    dependency
 
@@ -227,8 +229,6 @@ Shared options:
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
-  -a, --ambiguous       Use possibly ambiguous revisions, such as tags,
-                        bookmarks, branches.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
