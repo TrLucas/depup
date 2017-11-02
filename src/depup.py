@@ -58,8 +58,6 @@ class DepUpdate(object):
 
         self._dep_config = None
 
-        self._tag_mode = False
-
         default_template = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), 'templates',
             'default.trac')
@@ -109,12 +107,6 @@ class DepUpdate(object):
                 help=('The revision to update to. Defaults to the remote '
                       'master bookmark/branch. Must be accessible by the '
                       "dependency's vcs.")
-        )
-        shared.add_argument(
-                '-a', '--ambiguous', action='store_true', default=False,
-                dest='tag_mode',
-                help=('Use possibly ambiguous revisions, such as tags, '
-                      'bookmarks, branches.')
         )
         shared.add_argument(
                 '-f', '--filename', dest='filename', default=None,
