@@ -1,3 +1,5 @@
+syntax: glo
+
 *.pyc
 *.pyo
 .coverage

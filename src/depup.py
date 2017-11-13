@@ -249,10 +249,10 @@ class DepUpdate(object):
         return self._parsed_changes
 
     def build_diff(self):
-        """Write a unified diff of all changes to STDOUT."""
-        print(self._main_vcs.merged_diff(self.base_revision,
-                                         self.arguments.new_revision,
-                                         self.arguments.unified_lines))
+        """Generate a unified diff of all changes."""
+        return self._main_vcs.merged_diff(self.base_revision,
+                                          self.arguments.new_revision,
+                                          self.arguments.unified_lines)
 
     def build_issue(self):
         """Process all changes and render an issue."""
@@ -262,6 +262,7 @@ class DepUpdate(object):
         context['noissues'] = self.parsed_changes['noissues']
         context['hg_hash'] = self.changes[0]['hg_hash']
         context['git_hash'] = self.changes[0]['git_hash']
+        context['raw_changes'] = self.changes
 
         path, filename = os.path.split(self.arguments.tmpl_path)
 
