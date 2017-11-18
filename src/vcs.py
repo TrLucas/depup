@@ -19,11 +19,15 @@ from __future__ import print_function, unicode_literals
 
 import io
 import json
+import logging
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+
+logging.basicConfig()
+logger = logging.getLogger('vcs')
 
 
 class Vcs(object):
@@ -71,15 +75,14 @@ class Vcs(object):
         """Run the vcs with the given commands."""
         cmd = self.BASE_CMD + args
         try:
-            with open(os.devnull, 'w') as fpnull:
-                return subprocess.check_output(
-                    cmd,
-                    cwd=os.path.join(self._cwd),
-                    stderr=fpnull,
-                ).decode('utf-8')
+            return subprocess.check_output(
+                cmd,
+                cwd=os.path.join(self._cwd),
+                stderr=subprocess.STDOUT,
+            ).decode('utf-8')
         except subprocess.CalledProcessError as e:
-            print(e.output.decode('utf-8'), file=sys.stderr)
-            raise
+            logger.error(e.output.decode('utf-8'))
+            sys.exit(1)
 
     def _get_latest(self):
         self.run_cmd(self.UPDATE_LOCAL_HISTORY)
@@ -98,25 +101,29 @@ class Vcs(object):
 
         Parameters:
             rev_a: The revision representing the start.
-            rev_b: The revision representing the end.
+            rev_b: The revision representing the end. Defaults to
+                   Cls.DEFAULT_NEW_REVISION
             n_unified: The amount of context lines to add to the diff.
 
         """
         return self.run_cmd('diff', '--unified=' + str(n_unified),
-                            *(self._rev_comb(rev_a, rev_b)))
+                            *(self._rev_comb(
+                                rev_a,
+                                rev_b or self.DEFAULT_NEW_REVISION)))
 
     def change_list(self, rev_a, rev_b):
         """Return the repository's history from revisions a to b as JSON.
 
         Parameters:
             rev_a: The revision representing the start.
-            rev_b: The revision representing the end.
+            rev_b: The revision representing the end. Defaults to
+                   Cls.DEFAULT_NEW_REVISION
 
         """
         self._get_latest()
 
         log_format = self._log_format()
-        rev_cmd = self._rev_comb(rev_a, rev_b)
+        rev_cmd = self._rev_comb(rev_a, rev_b or self.DEFAULT_NEW_REVISION)
 
         changes = self.run_cmd(*('log',) + log_format + rev_cmd)
         return self._changes_as_json(changes)
@@ -190,6 +197,7 @@ class Mercurial(Vcs):
     LOG_TEMLATE = ('\\{"hash":"{node|short}","author":"{author|person}",'
                    '"date":"{date|rfc822date}","message":"{desc|strip|'
                    'firstline}"}\n')
+    DEFAULT_NEW_REVISION = 'master'
 
     REVISION_URL = 'https://hg.adblockplus.org/{repository}/rev/{revision}'
 
@@ -242,6 +250,7 @@ class Git(Vcs):
     BASE_CMD = (EXECUTABLE,)
     UPDATE_LOCAL_HISTORY = 'fetch'
     LOG_TEMLATE = '{"hash":"%h","author":"%an","date":"%aD","message":"%s"}'
+    DEFAULT_NEW_REVISION = 'origin/master'
 
     REVISION_URL = ('https://www.github.com/adblockplus/{repository}/commit/'
                     '{revision}')

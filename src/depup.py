@@ -50,8 +50,6 @@ class DepUpdate(object):
 
     VCS_EXECUTABLE = ('hg', '--config', 'defaults.log=', '--config',
                       'defaults.pull=')
-    DEFAULT_NEW_REVISION = 'master'
-
     ISSUE_NUMBER_REGEX = re.compile(r'\b(issue|fixes)\s+(\d+)\b', re.I)
     NOISSUE_REGEX = re.compile(r'^noissue\b', re.I)
 
@@ -118,7 +116,6 @@ class DepUpdate(object):
         )
         shared.add_argument(
                 '-r', '--revision', dest='new_revision',
-                default=self.DEFAULT_NEW_REVISION,
                 help=('The revision to update to. Defaults to the remote '
                       'master bookmark/branch. Must be accessible by the '
                       "dependency's vcs.")
