@@ -146,13 +146,18 @@ class DepUpdate(object):
         )
 
         subs = parser.add_subparsers(
-                title='Subcommands', dest='action',
+                title='Subcommands', dest='action', metavar='[subcommand]',
                 help=('Required, the actual command to be executed. Execute '
                       'run "<subcommand> -h" for more information.')
         )
 
         # Add the command and options for creating a diff
-        diff_parser = subs.add_parser('diff', parents=[options_parser])
+        diff_parser = subs.add_parser(
+                'diff', parents=[options_parser],
+                help='Create a unified diff of all changes',
+                description=("Invoke the current repository's VCS to generate "
+                             'a diff, containing all changes made between two '
+                             'revisions.'))
         diff_parser.add_argument(
                 '-n', '--n-context-lines', dest='unified_lines', type=int,
                 default=16,
@@ -161,7 +166,10 @@ class DepUpdate(object):
         )
 
         # Add the command and options for creating an issue body
-        issue_parser = subs.add_parser('issue', parents=[options_parser])
+        issue_parser = subs.add_parser(
+                'issue', parents=[options_parser], help='Render an issue body',
+                description=('Render an issue subject and an issue body, '
+                             'according to the given template.'))
         issue_parser.add_argument(
                 '-t', '--template', dest='tmpl_path',
                 default=default_template,
@@ -170,7 +178,12 @@ class DepUpdate(object):
         )
 
         # Add the command for printing a list of changes
-        subs.add_parser('changes', parents=[options_parser])
+        subs.add_parser(
+                'changes', parents=[options_parser],
+                help='Generate a list of commits between two revisions',
+                description=('Generate a list of commit hashes and commit '
+                             "messages between the dependency's current "
+                             'revision and a given new revision.'))
 
         self.arguments = parser.parse_args(args if len(args) > 0 else None)
 

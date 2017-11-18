@@ -150,7 +150,7 @@ Depup comes with an integrated help page for each subcommand. The full pages:
 ### Root
 
 ```
-usage: depup [-h] {diff,issue,changes} ...
+usage: depup [-h] [subcommand] ...
 
 Prepare a dependency update.
 
@@ -159,11 +159,14 @@ dependency update and provides additional information, i.e. a complete
 diff of imported changes, as well as related integration notes.
 
 optional arguments:
-  -h, --help            show this help message and exit
+  -h, --help    show this help message and exit
 
 Subcommands:
-  {diff,issue,changes}  Required, the actual command to be executed. Execute
-                        run "<subcommand> -h" for more information.
+  [subcommand]  Required, the actual command to be executed. Execute run
+                "<subcommand> -h" for more information.
+    diff        Create a unified diff of all changes
+    issue       Render an issue body
+    changes     Generate a list of commits between two revisions
 
 ```
 
@@ -173,6 +176,9 @@ Subcommands:
 usage: depup diff [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                   [-m LOCAL_MIRROR] [-n UNIFIED_LINES]
                   dependency
+
+Invoke the current repository's VCS to generate a diff, containing all changes
+made between two revisions.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -210,6 +216,9 @@ usage: depup changes [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                      [-m LOCAL_MIRROR]
                      dependency
 
+Generate a list of commit hashes and commit messages between the dependency's
+current revision and a given new revision.
+
 optional arguments:
   -h, --help            show this help message and exit
 
@@ -242,6 +251,8 @@ Shared options:
 usage: depup issue [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
                    [-m LOCAL_MIRROR] [-t TMPL_PATH]
                    dependency
+
+Render an issue subject and an issue body, according to the given template.
 
 optional arguments:
   -h, --help            show this help message and exit
