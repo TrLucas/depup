@@ -31,7 +31,6 @@ import logging
 import os
 import re
 import subprocess
-import sys
 try:
     from urllib import urlopen
 except ImportError:
@@ -99,8 +98,7 @@ class DepUpdate(object):
             )
             if len(self.changes) > 0:
                 # reverse mode. Uh-oh.
-                print('WARNING: you are trying to downgrade the dependency!',
-                      file=sys.stderr)
+                logger.warn('You are trying to downgrade the dependency!')
 
         self._main_vcs.enhance_changes_information(
             self.changes,
@@ -263,7 +261,7 @@ class DepUpdate(object):
                         'warning: no issue reference in commit message: '
                         '"{message}" (commit {hg_hash} | {git_hash})\n'
                     ).format(**change)
-                    print(msg, file=sys.stderr)
+                    logger.warn(msg)
 
         return issue_ids, noissues
 
@@ -395,6 +393,8 @@ class DepUpdate(object):
         in the associated issue on https://issues.adblockplus.org. If found,
         write the corresponding url to STDERR.
         """
+        # Let logger show INFO-level messages
+        logger.setLevel(logging.INFO)
         integration_notes_regex = re.compile(r'Integration\s*notes', re.I)
 
         def from_url(issue_url):
@@ -411,7 +411,7 @@ class DepUpdate(object):
             if not integration_notes_regex.search(html):
                 continue
 
-            print('Integration notes found: ' + issue_url, file=sys.stderr)
+            logger.info('Integration notes found: ' + issue_url)
 
     def build_changes(self):
         """Write a descriptive list of the changes to STDOUT."""
@@ -435,6 +435,7 @@ class DepUpdate(object):
             return commit_msg
         except subprocess.CalledProcessError:
             self._main_vcs.undo_changes()
+            logger.error('Could not safely commit the changes. Reverting.')
 
     def __call__(self):
         """Let this class's objects be callable, run all desired tasks."""
