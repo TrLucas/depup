@@ -115,9 +115,9 @@ class DepUpdate(object):
             description=__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-        # First prepare all shared options
+        # First prepare all basic shared options
         options_parser = argparse.ArgumentParser(add_help=False)
-        shared = options_parser.add_argument_group(title='Shared options')
+        shared = options_parser.add_argument_group()
         shared.add_argument(
                 'dependency',
                 help=('The dependency to be updated, as specified in the '
@@ -130,28 +130,32 @@ class DepUpdate(object):
                       "dependency's vcs.")
         )
         shared.add_argument(
+                '-m', '--mirrored-repository', dest='local_mirror',
+                help=('Path to the local copy of a mirrored repository. '
+                      'Used to fetch the corresponding hash. If not '
+                      'given, the source parsed from the dependencies file is '
+                      'used.')
+        )
+
+        # Shared options for non-commit commands
+        advanced_parser = argparse.ArgumentParser(add_help=False)
+        advanced = advanced_parser.add_argument_group()
+        advanced.add_argument(
                 '-f', '--filename', dest='filename', default=None,
                 help=("When specified, write the subcommand's output to the "
                       'given file, rather than to STDOUT.')
         )
-        shared.add_argument(
+        advanced.add_argument(
+                '-s', '--skip-mirror', action='store_true', dest='skip_mirror',
+                help='Do not use any mirror.'
+        )
+        advanced.add_argument(
                 '-l', '--lookup-integration-notes', action='store_true',
                 dest='lookup_inotes', default=False,
                 help=('Search https://issues.adblockplus.org for integration '
                       'notes associated with the included issue IDs. The '
                       'results are written to STDERR. CAUTION: This is a very '
                       'network heavy operation.')
-        )
-        shared.add_argument(
-                '-s', '--skip-mirror', action='store_true', dest='skip_mirror',
-                help='Do not use any mirror.'
-        )
-        shared.add_argument(
-                '-m', '--mirrored-repository', dest='local_mirror',
-                help=('Path to the local copy of a mirrored repository. '
-                      'Used to fetch the corresponding hash. If not '
-                      'given, the source parsed from the dependencies file is '
-                      'used.')
         )
 
         subs = parser.add_subparsers(
@@ -162,7 +166,7 @@ class DepUpdate(object):
 
         # Add the command and options for creating a diff
         diff_parser = subs.add_parser(
-                'diff', parents=[options_parser],
+                'diff', parents=[options_parser, advanced_parser],
                 help='Create a unified diff of all changes',
                 description=("Invoke the current repository's VCS to generate "
                              'a diff, containing all changes made between two '
@@ -176,7 +180,8 @@ class DepUpdate(object):
 
         # Add the command and options for creating an issue body
         issue_parser = subs.add_parser(
-                'issue', parents=[options_parser], help='Render an issue body',
+                'issue', parents=[options_parser, advanced_parser],
+                help='Render an issue body',
                 description=('Render an issue subject and an issue body, '
                              'according to the given template.'))
         issue_parser.add_argument(
@@ -188,11 +193,24 @@ class DepUpdate(object):
 
         # Add the command for printing a list of changes
         subs.add_parser(
-                'changes', parents=[options_parser],
+                'changes', parents=[options_parser, advanced_parser],
                 help='Generate a list of commits between two revisions',
                 description=('Generate a list of commit hashes and commit '
                              "messages between the dependency's current "
                              'revision and a given new revision.'))
+
+        # Add the command for changing and committing a dependency update
+        commit_parser = subs.add_parser(
+                'commit', help='Update and commit a dependency change',
+                parents=[options_parser],
+                description=('Rewrite and commit a dependency file to the new '
+                             'revision. WARNING: This actually changes your '
+                             "repository's history, use with care!"))
+        commit_parser.add_argument(
+                'issue_number', help=('The issue number, filed on '
+                                      'https://issues.adblockplus.org'))
+        commit_parser.set_defaults(skip_mirror=False, lookup_inotes=False,
+                                   filename=None)
 
         self.arguments = parser.parse_args(args if len(args) > 0 else None)
 
@@ -267,6 +285,87 @@ class DepUpdate(object):
             self._parsed_changes['noissues'] = noissues
         return self._parsed_changes
 
+    def _possible_sources(self):
+        root_conf = self._dep_config['_root']
+        config = self.dep_config[self.arguments.dependency]
+
+        # The fallback / main source paths for a repository are given in the
+        # dependencies file's _root section.
+        keys = ['hg', 'git']
+        possible_sources = {}
+        possible_sources.update({
+            key + '_root': root_conf[key]
+            for key in keys
+        })
+
+        # Any dependency may specify a custom source location.
+        possible_sources.update({
+            key: source for key, source in [
+                (key, config.get(key, (None, None))[0]) for key in keys
+            ] if source is not None
+        })
+
+        return possible_sources
+
+    def _mirror_location(self):
+        possible_sources = self._possible_sources()
+        mirror_ex = self._main_vcs._other_cls.EXECUTABLE
+
+        # If the user specified a local mirror, use it. Otherwise use the
+        # mirror, which was specified in the dependencies file.
+        if self.arguments.local_mirror:
+            mirror = self.arguments.local_mirror
+        else:
+            for key in [mirror_ex, mirror_ex + '_root']:
+                if key in possible_sources:
+                    mirror = possible_sources[key]
+                    break
+        return mirror
+
+    def _make_dependencies_string(self, hg_source=None, hg_rev=None,
+                                  git_source=None, git_rev=None,
+                                  remote_name=None):
+        dependency = '{} = {}'.format(self.arguments.dependency,
+                                      remote_name or self.arguments.dependency)
+
+        for prefix, rev, source in [(' hg:', hg_rev, hg_source),
+                                    (' git:', git_rev, git_source)]:
+            if rev is not None:
+                dependency += prefix
+                if source is not None:
+                    dependency += source + '@'
+                dependency += rev
+
+        return dependency
+
+    def _update_dependencies_file(self):
+        config = self.dep_config[self.arguments.dependency]
+
+        remote_repository_name, none_hash_rev = config.get('*', (None, None))
+        hg_source, hg_rev = config.get('hg', (None, None))
+        git_source, git_rev = config.get('git', (None, None))
+
+        current_entry = self._make_dependencies_string(
+            hg_source, hg_rev, git_source, git_rev, remote_repository_name
+        )
+
+        new_entry = self._make_dependencies_string(
+            hg_source, self.changes[0]['hg_hash'], git_source,
+            self.changes[0]['git_hash'], remote_repository_name
+        )
+
+        dependency_path = os.path.join(self._cwd, 'dependencies')
+        with io.open(dependency_path, 'r', encoding='utf-8') as fp:
+            current_deps = fp.read()
+        with io.open(dependency_path, 'w', encoding='utf-8') as fp:
+            fp.write(current_deps.replace(current_entry, new_entry))
+
+    def _update_copied_code(self):
+        subprocess.check_output(
+            ['python2', 'ensure_dependencies.py'],
+            cwd=self._cwd
+        )
+
     def build_diff(self):
         """Generate a unified diff of all changes."""
         return self._main_vcs.merged_diff(self.base_revision,
@@ -322,42 +421,20 @@ class DepUpdate(object):
              ).format(**change) for change in self.changes]
         )
 
-    def _possible_sources(self):
-        root_conf = self._dep_config['_root']
-        config = self.dep_config[self.arguments.dependency]
+    def commit_update(self):
+        """Commit the new dependency and potentially updated files."""
+        commit_msg = 'Issue {} - Update {} to {}'.format(
+                self.arguments.issue_number, self.arguments.dependency,
+                ' / '.join((self.changes[0]['hg_hash'],
+                            self.changes[0]['git_hash'])))
+        try:
+            self._update_dependencies_file()
+            self._update_copied_code()
+            self.root_repo.commit_changes(commit_msg)
 
-        # The fallback / main source paths for a repository are given in the
-        # dependencies file's _root section.
-        keys = ['hg', 'git']
-        possible_sources = {}
-        possible_sources.update({
-            key + '_root': root_conf[key]
-            for key in keys
-        })
-
-        # Any dependency may specify a custom source location.
-        possible_sources.update({
-            key: source for key, source in [
-                (key, config.get(key, (None, None))[0]) for key in keys
-            ] if source is not None
-        })
-
-        return possible_sources
-
-    def _mirror_location(self):
-        possible_sources = self._possible_sources()
-        mirror_ex = self._main_vcs._other_cls.EXECUTABLE
-
-        # If the user specified a local mirror, use it. Otherwise use the
-        # mirror, which was specified in the dependencies file.
-        if self.arguments.local_mirror:
-            mirror = self.arguments.local_mirror
-        else:
-            for key in [mirror_ex, mirror_ex + '_root']:
-                if key in possible_sources:
-                    mirror = possible_sources[key]
-                    break
-        return mirror
+            return commit_msg
+        except subprocess.CalledProcessError:
+            self._main_vcs.undo_changes()
 
     def __call__(self):
         """Let this class's objects be callable, run all desired tasks."""
@@ -365,6 +442,7 @@ class DepUpdate(object):
             'diff': self.build_diff,
             'changes': self.build_changes,
             'issue': self.build_issue,
+            'commit': self.commit_update,
         }
 
         if len(self.changes) == 0:

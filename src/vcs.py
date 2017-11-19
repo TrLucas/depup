@@ -241,10 +241,18 @@ class Mercurial(Vcs):
             fp.write('[paths]{}default = {}{}'.format(os.linesep, location,
                                                       os.linesep))
 
+    def commit_changes(self, msg):
+        """Add any local changes and commit the with <msg>."""
+        self.run_cmd('commit', '-m', msg)
+
+    def undo_changes(self):
+        """Undo all changes in local repsitory and leave no backup."""
+        self.run_cmd('revert', '--all', '--no-backup')
+
     def repo_is_clean(self):
         """Check whether the current repository is clean."""
         buff = self.run_cmd('status')
-        return len(buff == 0)
+        return len(buff) == 0
 
 
 class Git(Vcs):
@@ -289,6 +297,15 @@ class Git(Vcs):
     def _make_temporary(self, location):
         self._cwd = tempfile.mkdtemp()
         self.run_cmd('clone', '--bare', location, self._cwd)
+
+    def commit_changes(self, msg):
+        """Add any local changes and commit the with <msg>."""
+        self.run_cmd('add', '.')
+        self.run_cmd('commit', '-m', msg)
+
+    def undo_changes(self):
+        """Undo all changes in local repsitory."""
+        self.run_cmd('checkout', '.')
 
     def repo_is_clean(self):
         """Check whether the current repository is clean."""

@@ -11,7 +11,9 @@ dependency.
 You can run this programm to get a list of potentially included changes
 (represented by their commit messages), you can create a unified diff of all
 potentially included changes or you can create an issue body, which is supposed
-to be filed on https://issues.adblockplus.org.
+to be filed on https://issues.adblockplus.org. After filing an issue and hence
+having a corresponding issue number, you can commit the necessary changes in
+order to actually perform a dependency update.
 
 Since there won't be any way to bridge submodules / subrepositories between
 Git and Mercurial any time soon, we will stay dependent on a manual approach
@@ -143,6 +145,18 @@ index 4090c27..5832582 100644
 ...
 ```
 
+### Commit all necessary changes (along with file updates done by ensure_dependencies.py) to perform a dependency update
+**Note**: You must have already created an issue and know the corresponding
+issue number for this
+```
+$ depup commit buildtools 5698
+```
+
+Result:
+```
+Issue 5698 - Update buildtools to 1c798cc8b402 / 9643c0
+```
+
 ## Help
 
 Depup comes with an integrated help page for each subcommand. The full pages:
@@ -167,14 +181,15 @@ Subcommands:
     diff        Create a unified diff of all changes
     issue       Render an issue body
     changes     Generate a list of commits between two revisions
+    commit      Update and commit a dependency change
 
 ```
 
 ### diff
 
 ```
-usage: depup diff [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
-                  [-m LOCAL_MIRROR] [-n UNIFIED_LINES]
+usage: depup diff [-h] [-r NEW_REVISION] [-m LOCAL_MIRROR] [-f FILENAME] [-s]
+                  [-l] [-n UNIFIED_LINES]
                   dependency
 
 Invoke the current repository's VCS to generate a diff, containing all changes
@@ -186,34 +201,33 @@ optional arguments:
                         Number of unified context lines to be added to the
                         diff. Defaults to 16 (Used only with -d/--diff).
 
-Shared options:
   dependency            The dependency to be updated, as specified in the
                         dependencies file.
   -r NEW_REVISION, --revision NEW_REVISION
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
+  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
+                        Path to the local copy of a mirrored repository. Used
+                        to fetch the corresponding hash. If not given, the
+                        source parsed from the dependencies file is used.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
+  -s, --skip-mirror     Do not use any mirror.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
-  -s, --skip-mirror     Do not use any mirror.
-  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
-                        Path to the local copy of a mirrored repository. Used
-                        to fetch the corresponding hash. If not given, the
-                        source parsed from the dependencies file is used.
 
 ```
 
 ### changes
 
 ```
-usage: depup changes [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
-                     [-m LOCAL_MIRROR]
+usage: depup changes [-h] [-r NEW_REVISION] [-m LOCAL_MIRROR] [-f FILENAME]
+                     [-s] [-l]
                      dependency
 
 Generate a list of commit hashes and commit messages between the dependency's
@@ -222,34 +236,33 @@ current revision and a given new revision.
 optional arguments:
   -h, --help            show this help message and exit
 
-Shared options:
   dependency            The dependency to be updated, as specified in the
                         dependencies file.
   -r NEW_REVISION, --revision NEW_REVISION
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
+  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
+                        Path to the local copy of a mirrored repository. Used
+                        to fetch the corresponding hash. If not given, the
+                        source parsed from the dependencies file is used.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
+  -s, --skip-mirror     Do not use any mirror.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
-  -s, --skip-mirror     Do not use any mirror.
-  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
-                        Path to the local copy of a mirrored repository. Used
-                        to fetch the corresponding hash. If not given, the
-                        source parsed from the dependencies file is used.
 
 ```
 
 ### issue
 
 ```
-usage: depup issue [-h] [-r NEW_REVISION] [-f FILENAME] [-l] [-s]
-                   [-m LOCAL_MIRROR] [-t TMPL_PATH]
+usage: depup issue [-h] [-r NEW_REVISION] [-m LOCAL_MIRROR] [-f FILENAME] [-s]
+                   [-l] [-t TMPL_PATH]
                    dependency
 
 Render an issue subject and an issue body, according to the given template.
@@ -260,22 +273,50 @@ optional arguments:
                         The template to use. Defaults to the provided
                         default.trac (Used only with -i/--issue).
 
-Shared options:
   dependency            The dependency to be updated, as specified in the
                         dependencies file.
   -r NEW_REVISION, --revision NEW_REVISION
                         The revision to update to. Defaults to the remote
                         master bookmark/branch. Must be accessible by the
                         dependency's vcs.
+  -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
+                        Path to the local copy of a mirrored repository. Used
+                        to fetch the corresponding hash. If not given, the
+                        source parsed from the dependencies file is used.
   -f FILENAME, --filename FILENAME
                         When specified, write the subcommand's output to the
                         given file, rather than to STDOUT.
+  -s, --skip-mirror     Do not use any mirror.
   -l, --lookup-integration-notes
                         Search https://issues.adblockplus.org for integration
                         notes associated with the included issue IDs. The
                         results are written to STDERR. CAUTION: This is a very
                         network heavy operation.
-  -s, --skip-mirror     Do not use any mirror.
+
+```
+
+### commit
+
+```
+usage: depup commit [-h] [-r NEW_REVISION] [-m LOCAL_MIRROR]
+                    dependency issue_number
+
+Rewrite and commit a dependency file to the new revision. WARNING: This
+actually changes your repository's history, use with care!
+
+positional arguments:
+  issue_number          The issue number, filed on
+                        https://issues.adblockplus.org
+
+optional arguments:
+  -h, --help            show this help message and exit
+
+  dependency            The dependency to be updated, as specified in the
+                        dependencies file.
+  -r NEW_REVISION, --revision NEW_REVISION
+                        The revision to update to. Defaults to the remote
+                        master bookmark/branch. Must be accessible by the
+                        dependency's vcs.
   -m LOCAL_MIRROR, --mirrored-repository LOCAL_MIRROR
                         Path to the local copy of a mirrored repository. Used
                         to fetch the corresponding hash. If not given, the
