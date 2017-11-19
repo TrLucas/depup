@@ -27,6 +27,7 @@ from __future__ import print_function, unicode_literals
 import argparse
 import io
 import json
+import logging
 import os
 import re
 import subprocess
@@ -39,6 +40,9 @@ except ImportError:
 import jinja2
 
 from src.vcs import Vcs
+
+logging.basicConfig()
+logger = logging.getLogger('depup')
 
 
 class DepUpdate(object):
@@ -64,6 +68,11 @@ class DepUpdate(object):
 
         """
         self._cwd = os.getcwd()
+
+        self.root_repo = Vcs.factory(self._cwd)
+        if not self.root_repo.repo_is_clean():
+            logger.error('Your repository is dirty')
+            exit(1)
 
         self._base_revision = None
         self._parsed_changes = None

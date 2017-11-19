@@ -241,6 +241,11 @@ class Mercurial(Vcs):
             fp.write('[paths]{}default = {}{}'.format(os.linesep, location,
                                                       os.linesep))
 
+    def repo_is_clean(self):
+        """Check whether the current repository is clean."""
+        buff = self.run_cmd('status')
+        return len(buff == 0)
+
 
 class Git(Vcs):
     """Git specialization of Vcs."""
@@ -284,3 +289,12 @@ class Git(Vcs):
     def _make_temporary(self, location):
         self._cwd = tempfile.mkdtemp()
         self.run_cmd('clone', '--bare', location, self._cwd)
+
+    def repo_is_clean(self):
+        """Check whether the current repository is clean."""
+        # unstaged changes
+        no_uncommited = len(self.run_cmd('diff-index', 'HEAD', '--')) == 0
+        # untracked changes
+        no_untracked = len(self.run_cmd('ls-files', '-o', '-d',
+                                        '--exclude-standard')) == 0
+        return no_uncommited and no_untracked
