@@ -45,10 +45,10 @@ class _VcsCmd(object):
         return
 
 
-@pytest.fixture
-def hg_repo(tmpdir):
+@pytest.fixture(scope='module')
+def hg_repo(tmpdir_factory):
     """Create a mercurial repository for the tests."""
-    hg_dir = tmpdir.mkdir('hg').mkdir('testrepo')
+    hg_dir = tmpdir_factory.mktemp('repos').mkdir('hg').mkdir('testrepo')
     hg = _VcsCmd('hg', str(hg_dir))
 
     hg.run('init')
@@ -66,9 +66,9 @@ def hg_repo(tmpdir):
 
 
 @pytest.fixture
-def git_repo(tmpdir):
+def git_repo(tmpdir_factory):
     """Create a git repository for the tests."""
-    git_dir = tmpdir.mkdir('git').mkdir('testrepo')
+    git_dir = tmpdir_factory.mktemp('repos').mkdir('git').mkdir('testrepo')
     git = _VcsCmd('git', str(git_dir))
 
     git.run('init')
