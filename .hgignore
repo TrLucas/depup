@@ -1,4 +1,4 @@
-syntax: glo
+syntax: glob
 
 *.pyc
 *.pyo

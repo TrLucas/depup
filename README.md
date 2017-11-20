@@ -4,12 +4,12 @@
 
 ## Introduction
 
-This program is meant to ease up the process of gathering information /
+This program is meant to ease the process of gathering information /
 preparing an issue on issues.adblockplus.org, in order to update a given
 dependency.
 
-You can run this programm to get a list of potentially included changes
-(represented by their commit messages), you can create a unified diff of all
+You can run this program to get a list of potentially included changes
+(represented by their commit messages). You can create a unified diff of all
 potentially included changes or you can create an issue body, which is supposed
 to be filed on https://issues.adblockplus.org. After filing an issue and hence
 having a corresponding issue number, you can commit the necessary changes in
@@ -68,7 +68,7 @@ Result:
 
 ```
 
-### Generate a bare issue body for updating to the local master (-r master), but explicitly skip any mirroring (-s)
+### Generate a bare issue body for updating to the local master branch/bookmark (-r master), without mirroring Git if Mercurial is used (or vice versa) to figure out the corresponding revision (-s)
 
 ```
 $ depup issue adblockpluscore -r master -s
