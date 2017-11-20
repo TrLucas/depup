@@ -69,9 +69,6 @@ class DepUpdate(object):
         self._cwd = os.getcwd()
 
         self.root_repo = Vcs.factory(self._cwd)
-        if not self.root_repo.repo_is_clean():
-            logger.error('Your repository is dirty')
-            exit(1)
 
         self._base_revision = None
         self._parsed_changes = None
@@ -85,6 +82,11 @@ class DepUpdate(object):
 
         # Initialize and run the internal argument parser
         self._make_arguments(default_template, *args)
+
+        # Check if root repository is dirty
+        if not self.root_repo.repo_is_clean():
+            logger.error('Your repository is dirty')
+            exit(1)
 
         # Initialize the main VCS and the list of changes
         self._main_vcs = Vcs.factory(os.path.join(self._cwd,
