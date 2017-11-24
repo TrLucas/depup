@@ -1,6 +1,8 @@
+# Closed Developement
+
+Developement in this repository is now stopped in favor of [the actual fork](https://github.com/TrLucas/codingtools/tree/eyeo_depup/eyeo-depup).
+
 # Easy dependency updating
-
-
 
 ## Introduction
 
